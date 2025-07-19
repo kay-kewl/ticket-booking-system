@@ -19,12 +19,16 @@ func getEnv(key, defaultValue string) string {
 }
 
 func Load() (*Config, error) {
-	postgresURL := fmt.Sprintf("postgres://%s:%s@postgres:%s/%s",
-								getEnv("POSTGRES_USER", "user"),
-								getEnv("POSTGRES_PASSWORD", "password"),
-								getEnv("POSTGRES_PORT", "5432"),
-								getEnv("POSTGRES_DB", "booking_db"),
-	)
+	postgresURL := getEnv("DATABASE_URL", "")
+	if postgresURL == "" {
+		postgresURL = fmt.Sprintf("postgres://%s:%s@postgres:%s/%s?sslmode=disable",
+								  getEnv("POSTGRES_USER", "user"),
+							   	  getEnv("POSTGRES_PASSWORD", "password"),
+								  getEnv("POSTGRES_PORT", "5432"),
+								  getEnv("POSTGRES_DB", "booking_db"),
+		)
+	}
+	
 
 	cfg := &Config{
 		APIPort:		getEnv("API_PORT", "8080"),

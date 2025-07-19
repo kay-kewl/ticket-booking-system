@@ -18,26 +18,37 @@ func main() {
 
 	logger.Info("API Gateway is starting up...")
 
-	cfg, error := config.Load()
-	if error != nil {
-		logger.Error("failed to load configuration", "error", error)
-		os.Exit(-1)
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Error("failed to load configuration", "error", err)
+		os.Exit(1)
 	}
 
 	logger.Info("Configuration loaded, logger initialized")
 
-	dbPool, error := database.NewConnection(context.Background(), cfg.PostgresURL, logger)
-	if error != nil {
-		logger.Error("Failed to connect to database", "error", error)
+	dbPool, err := database.NewConnection(context.Background(), cfg.PostgresURL, logger)
+	if err != nil {
+		logger.Error("Failed to connect to database", "error", err)
 		os.Exit(1)
 	}
 
 	defer dbPool.Close()
 
+	if err := database.RunMigrations(context.Background(), cfg.PostgresURL, logger); err != nil {
+		logger.Error("Failed to run migrations", "error", err)
+		os.Exit(1)
+	}
+
 	logger.Info("Application initialized successfully. Ready to start server.")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if err := dbPool.Ping(r.Context()); err != nil {
+			logger.Error("DB ping failed", "error", err)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("DB down"))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})

@@ -20,11 +20,9 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Error("failed to load configuration", "error", err)
+		logger.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
 	}
-
-	logger.Info("Configuration loaded, logger initialized")
 
 	dbPool, err := database.NewConnection(context.Background(), cfg.PostgresURL, logger)
 	if err != nil {
@@ -34,19 +32,14 @@ func main() {
 
 	defer dbPool.Close()
 
-	if err := database.RunMigrations(context.Background(), cfg.PostgresURL, logger); err != nil {
-		logger.Error("Failed to run migrations", "error", err)
-		os.Exit(1)
-	}
-
-	logger.Info("Application initialized successfully. Ready to start server.")
+	logger.Info("API Gateway ready")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := dbPool.Ping(r.Context()); err != nil {
-			logger.Error("DB ping failed", "error", err)
+			logger.Error("Database ping failed", "error", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte("DB down"))
+			w.Write([]byte("Database down"))
 			return
 		}
 		w.WriteHeader(http.StatusOK)

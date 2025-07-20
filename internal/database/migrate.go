@@ -11,7 +11,7 @@ import (
 
 func RunMigrations(ctx context.Context, dbURL string, logger *slog.Logger) error {
 	m, err := migrate.New(
-		"file:///app/services/api-gateway/migrations",
+		"file:///app/migrations",
 		dbURL,
 	)
 

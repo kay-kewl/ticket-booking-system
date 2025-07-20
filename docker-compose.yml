@@ -19,11 +19,38 @@ services:
     networks:
       - booking-net
 
+  migrate-auth:
+    image: migrate/migrate:v4.18.3
+    volumes:
+      - ./services/auth-service/migrations:/migrations
+    command: ["-path", "/migrations", "-database", "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable", "up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - booking-net
+
+  migrate-gateway:
+    image: migrate/migrate:v4.18.3
+    volumes:
+      - ./services/api-gateway/migrations:/migrations
+    command: ["-path", "/migrations", "-database", "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable", "up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - booking-net
+
   api-gateway:
     # container_name: api_gateway
     build:
       context: .
-      dockerfile: ./services/api-gateway/Dockerfile.dev
+      dockerfile: ./Dockerfile
+      args:
+        SERVICE: api-gateway
+        PORT: 8080
     ports:
       - "8080:8080"
     environment:
@@ -33,8 +60,30 @@ services:
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_DB=${POSTGRES_DB}
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable
-    volumes:
-      - .:/app
+    # volumes:
+    #   - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - booking-net
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        SERVICE: auth-service
+        PORT: 50051
+    ports:
+      - "50051:50051"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+    # volumes:
+    #   - .:/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,7 +92,6 @@ services:
 
 volumes:
   pgdata:
-
 
 networks:
   booking-net:

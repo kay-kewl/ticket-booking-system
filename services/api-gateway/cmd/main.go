@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
+	eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
 	"github.com/kay-kewl/ticket-booking-system/services/api-gateway/internal/handler"
@@ -28,7 +30,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	authServiceConn, err := grpc.NewClient("auth-service:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	authServiceAddr := fmt.Sprintf("auth-service:%s", cfg.AuthGRPCPort)
+	authServiceConn, err := grpc.NewClient(authServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Error("Failed to connect to auth-service", "error", err)
 		os.Exit(1)
@@ -37,6 +40,8 @@ func main() {
 
 	authClient := authv1.NewAuthClient(authServiceConn)
 
+	logger.Info("gRPC connection to auth-service established")
+
 	// dbPool, err := database.NewConnection(context.Background(), cfg.PostgresURL, logger)
 	// if err != nil {
 	// 	logger.Error("Failed to connect to database", "error", err)
@@ -44,13 +49,24 @@ func main() {
 	// }
 	// defer dbPool.Close()
 
-	logger.Info("gRPC connection to auth-service established")
+	eventServiceAddr := fmt.Sprintf("event-service:%s", cfg.EventGRPCPort)
+	eventServiceConn, err := grpc.NewClient(eventServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		logger.Error("Failed to connect to event-service", "error", err)
+		os.Exit(1)
+	}
+	defer eventServiceConn.Close()
 
-	h := handler.New(authClient, logger)
+	eventClient := eventv1.NewEventServiceClient(eventServiceConn)
+
+	logger.Info("gRPC connection to event-service established")
+
+	h := handler.New(authClient, eventClient, logger)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/register", h.Register)
 	mux.HandleFunc("/api/v1/login", h.Login)
+	mux.HandleFunc("GET /api/v1/events", h.ListEvents)
 	// mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 	// 	if err := dbPool.Ping(r.Context()); err != nil {
 	// 		logger.Error("Database ping failed", "error", err)

@@ -7,17 +7,20 @@ import (
 	"net/http"
 
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
+	eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
 )
 
 type Handler struct {
 	authClient	authv1.AuthClient
+	eventClient	eventv1.EventServiceClient
 	logger		*slog.Logger
 }
 
-func New(authClient authv1.AuthClient, logger *slog.Logger) *Handler {
+func New(authClient authv1.AuthClient, eventClient eventv1.EventServiceClient, logger *slog.Logger) *Handler {
 	return &Handler{
-		authClient: authClient,
-		logger:		logger,
+		authClient: 	authClient,
+		eventClient:	eventClient,
+		logger:			logger,
 	}
 }
 
@@ -93,4 +96,19 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(grpcResp)
+}
+
+func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
+	log := h.logger.With(slog.String("op", "handler.ListEvents"))
+
+	grpcResp, err := h.eventClient.ListEvents(context.Background(), &eventv1.ListEventsRequest{})
+	if err != nil {
+		log.Error("gRPC call to event-service failed", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(grpcResp.GetEvents())
 }

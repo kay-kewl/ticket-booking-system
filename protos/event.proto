@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package event;
+
+option go_package = "./event";
+
+message Event {
+	int64 id = 1;
+	string title = 2;
+	string description = 3;
+}
+
+message ListEventsRequest {}
+
+message ListEventsResponse {
+	repeated Event events = 1;
+}
+
+service EventService {
+	rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+}

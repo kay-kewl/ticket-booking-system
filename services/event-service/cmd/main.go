@@ -3,11 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
-	"net"
 	"syscall"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -15,15 +14,15 @@ import (
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
 	"github.com/kay-kewl/ticket-booking-system/internal/database"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
-	"github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/service"
-	"github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/storage"
-	grpcserver "github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/grpc"
+	grpcserver "github.com/kay-kewl/ticket-booking-system/services/event-service/internal/grpc"
+	"github.com/kay-kewl/ticket-booking-system/services/event-service/internal/service"
+	"github.com/kay-kewl/ticket-booking-system/services/event-service/internal/storage"
 )
 
 func main() {
 	logger := logging.New()
 
-	logger.Info("Auth Service is starting up...")
+	logger.Info("Event Service is starting up...")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -39,20 +38,20 @@ func main() {
 
 	defer dbPool.Close()
 
-	authStorage := storage.New(dbPool)
-	authService := service.New(authStorage, authStorage, 1 * time.Hour)
+	eventStorage := storage.New(dbPool)
+	eventService := service.New(eventStorage)
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.AuthGRPCPort))
+	l, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.EventGRPCPort))
 	if err != nil {
 		logger.Error("Failed to listen port", "error", err)
 		os.Exit(1)
 	}
 
-	logger.Info("Auth Service ready. gRPC server listening", "address", l.Addr().String())
+	logger.Info("Event Service ready. gRPC server listening", "address", l.Addr().String())
 
 	grpcSrv := grpc.NewServer()
 
-	grpcserver.Register(grpcSrv, authService)
+	grpcserver.Register(grpcSrv, eventService)
 
 	reflection.Register(grpcSrv)
 

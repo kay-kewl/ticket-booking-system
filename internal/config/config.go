@@ -8,6 +8,7 @@ import (
 type Config struct {
 	APIPort			string
 	AuthGRPCPort	string
+	BookingGRPCPort	string
 	EventGRPCPort	string
 	PostgresURL		string
 }
@@ -33,10 +34,11 @@ func Load() (*Config, error) {
 	
 
 	cfg := &Config{
-		APIPort:		getEnv("API_PORT", "8080"),
-		AuthGRPCPort:	getEnv("AUTH_GRPC_PORT", "50051"),
-		EventGRPCPort:	getEnv("EVENT_GRPC_PORT", "50052"),
-		PostgresURL:	postgresURL,
+		APIPort:			getEnv("API_PORT", "8080"),
+		AuthGRPCPort:		getEnv("AUTH_GRPC_PORT", "50051"),
+		BookingGRPCPort:	getEnv("BOOKING_GRPC_PORT", "50053"),
+		EventGRPCPort:		getEnv("EVENT_GRPC_PORT", "50052"),
+		PostgresURL:		postgresURL,
 	}
 
 	return cfg, nil

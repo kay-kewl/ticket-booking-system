@@ -5,28 +5,32 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
+	bookingv1 "github.com/kay-kewl/ticket-booking-system/gen/go/booking"
 	eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
 )
 
 type Handler struct {
-	authClient	authv1.AuthClient
-	eventClient	eventv1.EventServiceClient
-	logger		*slog.Logger
+	authClient		authv1.AuthClient
+	bookingClient	bookingv1.BookingServiceClient
+	eventClient		eventv1.EventServiceClient
+	logger			*slog.Logger
 }
 
-func New(authClient authv1.AuthClient, eventClient eventv1.EventServiceClient, logger *slog.Logger) *Handler {
+func New(authClient authv1.AuthClient, bookingClient bookingv1.BookingServiceClient, eventClient eventv1.EventServiceClient, logger *slog.Logger) *Handler {
 	return &Handler{
 		authClient: 	authClient,
+		bookingClient:	bookingClient,
 		eventClient:	eventClient,
 		logger:			logger,
 	}
 }
 
 type RegisterRequest struct {
-	Email 		string `json: "email"`
-	Password	string `json: "password"`
+	Email 		string `json:"email"`
+	Password	string `json:"password"`
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -67,8 +71,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 type LoginRequest struct {
-	Email		string `json: "email"`
-	Password	string `json: "password"`
+	Email		string `json:"email"`
+	Password	string `json:"password"`
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +100,62 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(grpcResp)
+}
+
+type CreateBookingRequest struct {
+	EventID int64 `json:"event_id"`
+	SeatIDs []int64 `json:"seat_ids"`
+}
+
+func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
+	const op = "handler.CreateBooking"
+
+	log := h.logger.With(slog.String("op", op))
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "missing authorization header", http.StatusUnauthorized)
+	}
+
+	headerParts := strings.Split(authHeader, " ")
+
+	if len(headerParts) != 2 || headerParts[0] != "Bearer" {
+		http.Error(w, "invalid authorization header", http.StatusUnauthorized)
+		return
+	}
+
+	token := headerParts[1]
+
+	validateResp, err := h.authClient.ValidateToken(context.Background(), &authv1.ValidateTokenRequest{Token: token})
+	if err != nil {
+		log.Error("Token validation failed", "error", err)
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	userID := validateResp.GetUserId()
+	log.Info("Token validated successfully", slog.Int64("userID", userID))
+
+	var req CreateBookingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	bookingResp, err := h.bookingClient.CreateBooking(context.Background(), &bookingv1.CreateBookingRequest{
+		UserId:		userID,
+		EventId:	req.EventID,
+		SeatIds:	req.SeatIDs,
+	})
+
+	if err != nil {
+		log.Error("gRPC call to booking-service failed", "error", err)
+		http.Error(w, "failed to create booking", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/jspn")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(bookingResp)
 }
 
 func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {

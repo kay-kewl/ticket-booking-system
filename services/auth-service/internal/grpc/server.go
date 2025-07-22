@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
 )
@@ -11,6 +13,7 @@ import (
 type Auth interface {
 	Login(ctx context.Context, email string, password string) (token string, err error)
 	Register(ctx context.Context, email string, password string) (userID int64, err error)
+	ValidateToken(ctx context.Context, token string) (userID int64, err error)
 }
 
 type serverAPI struct {
@@ -39,4 +42,13 @@ func (s *serverAPI) Login(ctx context.Context, req *authv1.LoginRequest) (*authv
 	}
 
 	return &authv1.LoginResponse{Token: token}, nil
+}
+
+func (s *serverAPI) ValidateToken(ctx context.Context, req *authv1.ValidateTokenRequest) (*authv1.ValidateTokenResponse, error) {
+	userID, err := s.auth.ValidateToken(ctx, req.GetToken())
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid token")
+	}
+
+	return &authv1.ValidateTokenResponse{UserId: userID}, nil
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"log/slog"
 	"syscall"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
+	bookingv1 "github.com/kay-kewl/ticket-booking-system/gen/go/booking"
 	eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
@@ -61,12 +63,23 @@ func main() {
 
 	logger.Info("gRPC connection to event-service established")
 
-	h := handler.New(authClient, eventClient, logger)
+	bookingServiceAddr := fmt.Sprintf("booking-service:%s", cfg.BookingGRPCPort)
+	bookingServiceConn, err := grpc.NewClient(bookingServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		logger.Error("Failed to connect to booking-service", slog.String("addr", bookingServiceAddr), "error", err)
+		os.Exit(1)
+	}
+	defer bookingServiceConn.Close()
+	bookingClient := bookingv1.NewBookingServiceClient(bookingServiceConn)
+	logger.Info("gRPC connection to booking-service established")
+
+	h := handler.New(authClient, bookingClient, eventClient, logger)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/register", h.Register)
-	mux.HandleFunc("/api/v1/login", h.Login)
+	mux.HandleFunc("POST /api/v1/register", h.Register)
+	mux.HandleFunc("POST /api/v1/login", h.Login)
 	mux.HandleFunc("GET /api/v1/events", h.ListEvents)
+	mux.HandleFunc("POST /api/v1/bookings", h.CreateBooking)
 	// mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 	// 	if err := dbPool.Ping(r.Context()); err != nil {
 	// 		logger.Error("Database ping failed", "error", err)

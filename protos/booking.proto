@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package booking;
+
+option go_package = "./booking";
+
+message CreateBookingRequest {
+	int64 user_id = 1;
+	int64 event_id = 2;
+	repeated int64 seat_ids = 3;
+}
+
+message CreateBookingResponse {
+	int64 booking_id = 1;
+}
+
+service BookingService {
+	rpc CreateBooking(CreateBookingRequest) returns (CreateBookingResponse);
+}

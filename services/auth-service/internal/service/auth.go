@@ -79,3 +79,27 @@ func (a *Auth) Login(ctx context.Context, email string, password string) (string
 
 	return tokenString, nil
 }
+
+func (a *Auth) ValidateToken(ctx context.Context, tokenString string) (int64, error) {
+	const op = "Auth.ValidateToken"
+
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %w", token.Header["alg"])
+		}
+
+		return []byte("my-secret"), nil
+	})
+
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if uidFloat, ok := claims["uid"].(float64); ok {
+			return int64(uidFloat), nil
+		}
+	}
+
+	return 0, fmt.Errorf("%s: invalid token", op)
+}

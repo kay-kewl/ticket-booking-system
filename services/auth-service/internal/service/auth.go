@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"golang.orgx/crypto/bcrypt"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -28,7 +28,7 @@ func New(userSaver UserSaver, userProvider UserProvider, tokenTTL time.Duration)
 	return &Auth{
 		userSaver:		userSaver,
 		userProvider: 	userProvider,
-		tokenTTL		tokenTTL,
+		tokenTTL:		tokenTTL,
 	}
 }
 
@@ -42,6 +42,11 @@ func (a *Auth) Register(ctx context.Context, email string, password string) (int
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
 
+	id, err := a.userSaver.SaveUser(ctx, email, passHash)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
 	return id, nil
 }
 
@@ -50,7 +55,7 @@ func (a *Auth) Login(ctx context.Context, email string, password string) (string
 
 	// TODO: validate
 
-	id, passHash := a.userProvider.User(ctx, email)
+	id, passHash, err := a.userProvider.User(ctx, email)
 	if err != nil {
 		// TODO: not found error
 		return "", fmt.Errorf("%s: %w", op, err)
@@ -63,7 +68,7 @@ func (a *Auth) Login(ctx context.Context, email string, password string) (string
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"uid": id,
-		"exp": time.Now().Add(a.tokenTTL).Unix()
+		"exp": time.Now().Add(a.tokenTTL).Unix(),
 	})
 
 	// TODO: hide the secret

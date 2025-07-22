@@ -12,6 +12,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY internal ./internal
+COPY gen ./gen
 
 COPY services/${SERVICE} ./services/${SERVICE}
 

@@ -26,8 +26,17 @@ func (s *serverAPI) Register(ctx context.Context, req *authv1.RegisterRequest) (
 	userID, err := s.auth.Register(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		// TODO: handle errors
-		return nil, error
+		return nil, err
 	}
 
 	return &authv1.RegisterResponse{UserId: userID}, nil
+}
+
+func (s *serverAPI) Login(ctx context.Context, req *authv1.LoginRequest) (*authv1.LoginResponse, error) {
+	token, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword())
+	if err != nil {
+		return nil, err
+	}
+
+	return &authv1.LoginResponse{Token: token}, nil
 }

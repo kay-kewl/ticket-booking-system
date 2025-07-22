@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
-	"net/http"
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
-	"github.com/kay-kewl/ticket-booking-system/internal/database"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
+	"github.com/kay-kewl/ticket-booking-system/services/api-gateway/internal/handler"
 )
 
 func main() {
@@ -24,27 +28,39 @@ func main() {
 		os.Exit(1)
 	}
 
-	dbPool, err := database.NewConnection(context.Background(), cfg.PostgresURL, logger)
+	authServiceConn, err := grpc.NewClient("auth-service:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		logger.Error("Failed to connect to database", "error", err)
+		logger.Error("Failed to connect to auth-service", "error", err)
 		os.Exit(1)
 	}
+	defer authServiceConn.Close()
 
-	defer dbPool.Close()
+	authClient := authv1.NewAuthClient(authServiceConn)
 
-	logger.Info("API Gateway ready")
+	// dbPool, err := database.NewConnection(context.Background(), cfg.PostgresURL, logger)
+	// if err != nil {
+	// 	logger.Error("Failed to connect to database", "error", err)
+	// 	os.Exit(1)
+	// }
+	// defer dbPool.Close()
+
+	logger.Info("gRPC connection to auth-service established")
+
+	h := handler.New(authClient, logger)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if err := dbPool.Ping(r.Context()); err != nil {
-			logger.Error("Database ping failed", "error", err)
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte("Database down"))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
+	mux.HandleFunc("/api/v1/register", h.Register)
+	mux.HandleFunc("/api/v1/login", h.Login)
+	// mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	// 	if err := dbPool.Ping(r.Context()); err != nil {
+	// 		logger.Error("Database ping failed", "error", err)
+	// 		w.WriteHeader(http.StatusServiceUnavailable)
+	// 		w.Write([]byte("Database down"))
+	// 		return
+	// 	}
+	// 	w.WriteHeader(http.StatusOK)
+	// 	w.Write([]byte("OK"))
+	// })
 
 	srv := &http.Server{
 		Addr: 		":" + cfg.APIPort,
@@ -63,7 +79,7 @@ func main() {
 	<-quit
 	logger.Info("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {

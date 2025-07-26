@@ -19,17 +19,6 @@ services:
     networks:
       - booking-net
 
-  migrate:
-    image: migrate/migrate:v4.18.3
-    volumes:
-      - ./db/migrations:/migrations
-    command: ["-path", "/migrations", "-database", "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable", "up"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - booking-net
-
   api-gateway:
     # container_name: api_gateway
     build:
@@ -53,8 +42,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+      auth-service:
+        condition: service_started
+      event-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
     networks:
       - booking-net
 
@@ -73,13 +66,13 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_DB=${POSTGRES_DB}
-    # volumes:
+    volumes:
+      - ./services/auth-service/migrations:/app/migrations
     #   - .:/app
+    command: sh -c "migrate -path /app/migrations -database 'postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable' up && /app/server"
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     networks:
       - booking-net
 
@@ -98,9 +91,12 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - ./services/event-service/migrations:/app/migrations
+    command: sh -c "migrate -path /app/migrations -database 'postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable' up && /app/server"
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
     networks:
       - booking-net
 
@@ -119,9 +115,16 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - ./services/booking-service/migrations:/app/migrations
+    command: sh -c "migrate -path /app/migrations -database 'postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable' up && /app/server"
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      event-service:
+        condition: service_started
     networks:
       - booking-net
 

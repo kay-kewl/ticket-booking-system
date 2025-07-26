@@ -1,7 +1,0 @@
-CREATE TABLE IF NOT EXISTS test_table (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_test_name ON test_table (name);

@@ -5,6 +5,10 @@ ARG PORT
 
 WORKDIR /app
 
+RUN apk --no-cache add curl && \
+    curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz | tar xvz && \
+    mv migrate /usr/bin/migrate
+
 COPY go.mod go.sum ./
 # COPY services/ ./services/
 # COPY pkg/ ./pkg/
@@ -28,6 +32,7 @@ ARG PORT
 
 WORKDIR /app
 
+COPY --from=builder /usr/bin/migrate /usr/bin/migrate
 COPY --from=builder /app/server /app/server
 
 # COPY --from=builder /app/services/${SERVICE}/migrations /app/migrations

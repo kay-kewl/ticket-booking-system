@@ -10,6 +10,9 @@ import (
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
 	bookingv1 "github.com/kay-kewl/ticket-booking-system/gen/go/booking"
 	eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Handler struct {
@@ -55,8 +58,15 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		log.Error("gRPC call failed", "error", err)
 		// TODO: gRPC errors to HTTP statuses
+		if st, ok := status.FromError(err); ok {
+			if st.Code() == codes.AlreadyExists {
+				log.Warn("Attempt to register existing user", "email", req.Email)
+				http.Error(w, "user with this email already exists", http.StatusConflict)
+				return
+			}
+		}
+		log.Error("gRPC call failed", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

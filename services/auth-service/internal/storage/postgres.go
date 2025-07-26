@@ -2,9 +2,11 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Storage struct {
@@ -15,6 +17,8 @@ func New(db *pgxpool.Pool) *Storage {
 	return &Storage{db: db}
 }
 
+var ErrUserExists = errors.New("user with this email already exists")
+
 func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (int64, error) {
 	const op = "storage.SaveUser"
 
@@ -23,6 +27,10 @@ func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (
 	var id int64
 	err := s.db.QueryRow(ctx, query, email, passHash).Scan(&id)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return 0, fmt.Errorf("%s: %w", op, ErrUserExists)
+		}
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
 

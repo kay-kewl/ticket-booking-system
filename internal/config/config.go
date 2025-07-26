@@ -11,6 +11,7 @@ type Config struct {
 	BookingGRPCPort	string
 	EventGRPCPort	string
 	PostgresURL		string
+	JWTSecret		string
 }
 
 func getEnv(key, defaultValue string) string {
@@ -39,6 +40,7 @@ func Load() (*Config, error) {
 		BookingGRPCPort:	getEnv("BOOKING_GRPC_PORT", "50053"),
 		EventGRPCPort:		getEnv("EVENT_GRPC_PORT", "50052"),
 		PostgresURL:		postgresURL,
+		JWTSecret:			getEnv("JWT_SECRET", "my-secret"),
 	}
 
 	return cfg, nil

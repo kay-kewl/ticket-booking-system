@@ -158,6 +158,13 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
+		if st, ok := status.FromError(err); ok {
+			if st.Code() == codes.FailedPrecondition {
+				log.Warn("Attempt to book reserved seats", "seats", req.SeatIDs)
+				http.Error(w, "booked seats have already been reserved", http.StatusConflict)
+				return
+			}
+		}
 		log.Error("gRPC call to booking-service failed", "error", err)
 		http.Error(w, "failed to create booking", http.StatusInternalServerError)
 		return

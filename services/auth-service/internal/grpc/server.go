@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
-	"github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/storage"
+	"github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/service"
 )
 
 type Auth interface {
@@ -31,7 +31,7 @@ func (s *serverAPI) Register(ctx context.Context, req *authv1.RegisterRequest) (
 	userID, err := s.auth.Register(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		// TODO: handle errors
-		if errors.Is(err, storage.ErrUserExists) {
+		if errors.Is(err, service.ErrUserExists) {
 			return nil, status.Error(codes.AlreadyExists, "user with this email already exists")
 		}
 		return nil, status.Error(codes.Internal, "failed to register user")

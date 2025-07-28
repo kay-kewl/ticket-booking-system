@@ -2,13 +2,17 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
-
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/storage"
 )
+
+var ErrUserExists = errors.New("user already exists")
 
 type UserSaver interface {
 	SaveUser(ctx context.Context, email string, passHash []byte) (int64, error)
@@ -44,6 +48,9 @@ func (a *Auth) Register(ctx context.Context, email string, password string) (int
 
 	id, err := a.userSaver.SaveUser(ctx, email, passHash)
 	if err != nil {
+		if errors.Is(err, storage.ErrUserExists) {
+			return 0, fmt.Errorf("%s: %w", op, ErrUserExists)
+		}
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
 

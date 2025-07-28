@@ -2,10 +2,14 @@ package grpc
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	bookingv1 "github.com/kay-kewl/ticket-booking-system/gen/go/booking"
+	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/service"
 )
 
 type Booking interface {
@@ -24,7 +28,10 @@ func Register(gRPCServer *grpc.Server, booking Booking) {
 func (s *serverAPI) CreateBooking(ctx context.Context, req *bookingv1.CreateBookingRequest) (*bookingv1.CreateBookingResponse, error) {
 	bookingID, err := s.booking.CreateBooking(ctx, req.GetUserId(), req.GetEventId(), req.GetSeatIds())
 	if err != nil {
-		return nil, err
+		if errors.Is(service.ErrSeatNotAvailable, err) {
+			return nil, status.Error(codes.FailedPrecondition, "seat has already been reserved")
+		}
+		return nil, status.Error(codes.Internal, "failed to create booking")
 	}
 
 	return &bookingv1.CreateBookingResponse{BookingId: bookingID}, nil

@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+var ErrUserExists = errors.New("user with this email already exists")
+
 type Storage struct {
 	db *pgxpool.Pool
 }
@@ -16,8 +18,6 @@ type Storage struct {
 func New(db *pgxpool.Pool) *Storage {
 	return &Storage{db: db}
 }
-
-var ErrUserExists = errors.New("user with this email already exists")
 
 func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (int64, error) {
 	const op = "storage.SaveUser"

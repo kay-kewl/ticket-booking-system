@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS seats;
+DROP TYPE IF EXISTS seat_status;

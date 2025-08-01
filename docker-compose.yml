@@ -19,11 +19,25 @@ services:
     networks:
       - booking-net
 
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running", "-q"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - booking-net
+
   api-gateway:
     # container_name: api_gateway
     build:
       context: .
-      dockerfile: ./Dockerfile
+      dockerfile: ./services/api-gateway/Dockerfile
       args:
         SERVICE: api-gateway
         PORT: 8080
@@ -54,10 +68,10 @@ services:
   auth-service:
     build:
       context: .
-      dockerfile: ./Dockerfile
+      dockerfile: ./services/auth-service/Dockerfile
       args:
         SERVICE: auth-service
-        PORT: 50051
+        # PORT: 50051
     ports:
       - "50051:50051"
     environment:
@@ -66,10 +80,11 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_DB=${POSTGRES_DB}
-    volumes:
-      - ./services/auth-service/migrations:/app/migrations
+      - DATABASE_SCHEMA=auth
+    # volumes:
+    #   - ./services/auth-service/migrations:/app/migrations
     #   - .:/app
-    command: sh -c "migrate -path /app/migrations -database 'postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable' up && /app/server"
+    # command: sh -c "PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -h postgres -d $${POSTGRES_DB} -c \"CREATE SCHEMA IF NOT EXISTS $${DATABASE_SCHEMA};\" && migrate -path /app/migrations -database \"postgres://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres:$${POSTGRES_PORT}/$${POSTGRES_DB}?sslmode=disable&search_path=$${DATABASE_SCHEMA}\" -verbose up && /app/server"
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,10 +94,10 @@ services:
   event-service:
     build:
       context: .
-      dockerfile: ./Dockerfile
+      dockerfile: ./services/event-service/Dockerfile
       args:
         SERVICE: event-service
-        PORT: 50052
+        # PORT: 50052
     ports:
       - "50052:50052"
     environment:
@@ -91,9 +106,10 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_DB=${POSTGRES_DB}
-    volumes:
-      - ./services/event-service/migrations:/app/migrations
-    command: sh -c "migrate -path /app/migrations -database 'postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable' up && /app/server"
+      - DATABASE_SCHEMA=event
+    # volumes:
+    #   - ./services/event-service/migrations:/app/migrations
+    # command: sh -c "PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -h postgres -d $${POSTGRES_DB} -c \"CREATE SCHEMA IF NOT EXISTS $${DATABASE_SCHEMA};\" && migrate -path /app/migrations -database \"postgres://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres:$${POSTGRES_PORT}/$${POSTGRES_DB}?sslmode=disable&search_path=$${DATABASE_SCHEMA}\" -verbose up && /app/server"
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,10 +119,10 @@ services:
   booking-service:
     build:
       context: .
-      dockerfile: ./Dockerfile
+      dockerfile: ./services/booking-service/Dockerfile
       args:
         SERVICE: booking-service
-        PORT: 50053
+        # PORT: 50053
     ports:
       - "50053:50053"
     environment:
@@ -115,11 +131,14 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_DB=${POSTGRES_DB}
-    volumes:
-      - ./services/booking-service/migrations:/app/migrations
-    command: sh -c "migrate -path /app/migrations -database 'postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable' up && /app/server"
+      - DATABASE_SCHEMA=booking
+    # volumes:
+    #   - ./services/booking-service/migrations:/app/migrations
+    # command: sh -c "PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -h postgres -d $${POSTGRES_DB} -c \"CREATE SCHEMA IF NOT EXISTS $${DATABASE_SCHEMA};\" && migrate -path /app/migrations -database \"postgres://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres:$${POSTGRES_PORT}/$${POSTGRES_DB}?sslmode=disable&search_path=$${DATABASE_SCHEMA}\" -verbose up && /app/server"
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       auth-service:
         condition: service_started

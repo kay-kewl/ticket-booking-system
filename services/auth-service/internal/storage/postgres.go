@@ -22,7 +22,7 @@ func New(db *pgxpool.Pool) *Storage {
 func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (int64, error) {
 	const op = "storage.SaveUser"
 
-	query := "INSERT INTO users(email, password_hash) VALUES($1, $2) RETURNING id"
+	query := "INSERT INTO auth.users(email, password_hash) VALUES($1, $2) RETURNING id"
 
 	var id int64
 	err := s.db.QueryRow(ctx, query, email, passHash).Scan(&id)
@@ -40,7 +40,7 @@ func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (
 func (s *Storage) User(ctx context.Context, email string) (int64, []byte, error) {
 	const op = "storage.User"
 
-	query := "SELECT id, password_hash FROM users WHERE email = $1"
+	query := "SELECT id, password_hash FROM auth.users WHERE email = $1"
 
 	var id int64
 	var passHash []byte

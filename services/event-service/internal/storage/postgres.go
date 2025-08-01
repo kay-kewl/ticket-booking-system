@@ -20,7 +20,7 @@ func New(db *pgxpool.Pool) *Storage {
 func (s *Storage) ListEvents(ctx context.Context) ([]*eventv1.Event, error) {
 	const op = "storage.ListEvents"
 
-	rows, err := s.db.Query(ctx, "SELECT id, title, description FROM events ORDER BY created_at DESC")
+	rows, err := s.db.Query(ctx, "SELECT id, title, description FROM event.events ORDER BY created_at DESC")
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}

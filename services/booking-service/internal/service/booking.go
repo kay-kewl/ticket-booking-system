@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"errors"
+	"fmt"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/storage"
 )
@@ -16,11 +19,13 @@ type BookingCreator interface {
 
 type Booking struct {
 	bookingCreator	BookingCreator
+	amqpChannel		*amqp.Channel
 }
 
-func New(bookingCreator BookingCreator) *Booking {
+func New(bookingCreator BookingCreator, amqpChannel *amqp.Channel) *Booking {
 	return &Booking{
 		bookingCreator: bookingCreator,
+		amqpChannel:	amqpChannel,
 	}
 }
 
@@ -34,6 +39,24 @@ func (b *Booking) CreateBooking(ctx context.Context, userID, eventID int64, seat
 			return 0, fmt.Errorf("%s: %w", op, ErrSeatNotAvailable)
 		}
 		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	msgBody, _ := json.Marshal(map[string]int64{"booking_id": bookingID})
+
+	err = b.amqpChannel.PublishWithContext(
+		ctx,
+		"bookings_exchange",
+		"booking.created",
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:	"application/json",
+			Body:			msgBody,
+		},
+	)
+
+	if err != nil {
+		// TODO: critical error: booking created but failed to publish expiration message
 	}
 
 	return bookingID, nil 

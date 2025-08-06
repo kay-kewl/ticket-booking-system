@@ -38,16 +38,16 @@ mv .envexample .env
 Чтобы протестировать систему, необходимо добавить события:
 
 1.  Зайдём в psql:
-    ```bash
-    docker exec -it ticket-booking-system-postgres-1 psql -U user -d booking_db
-    ```
+```bash
+docker exec -it ticket-booking-system-postgres-1 psql -U user -d booking_db
+```
 
 3.  Добавим события:
-    ```sql
-    INSERT INTO events (id, title, description) VALUES (1, 'Shrek', 'A mean lord exiles fairytale creatures to the swamp of a grumpy ogre, who must go on a quest and rescue a princess for the lord in order to get his land back.');
-    INSERT INTO events (id, title, description) VALUES (2, 'Agil', 'An angelically patient person welcomes a group of dysfunctional friends into their life, who then embark on a quest to test every last one of his boundaries for their own amusement and personal gain.');
-    \q
-    ```
+```sql
+INSERT INTO events (id, title, description) VALUES (1, 'Shrek', 'A mean lord exiles fairytale creatures to the swamp of a grumpy ogre, who must go on a quest and rescue a princess for the lord in order to get his land back.');
+INSERT INTO events (id, title, description) VALUES (2, 'Agil', 'An angelically patient person welcomes a group of dysfunctional friends into their life, who then embark on a quest to test every last one of his boundaries for their own amusement and personal gain.');
+\q
+```
 
 ## Примеры
 

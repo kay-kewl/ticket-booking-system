@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -18,6 +19,7 @@ import (
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/service"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/storage"
+	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/worker"
 	grpcserver "github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/grpc"
 )
 
@@ -63,13 +65,18 @@ func main() {
 	defer dbPool.Close()
 
 	bookingStorage := storage.New(dbPool)
-	bookingService := service.New(bookingStorage, ch)
+	bookingService := service.New(bookingStorage)
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.BookingGRPCPort))
 	if err != nil {
 		logger.Error("Failed to listen port", "error", err)
 		os.Exit(1)
 	}
+
+	outboxWorker := worker.NewOutboxWorker(dbPool, ch, logger, 10 * time.Second)
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	defer workerCancel()
+	go outboxWorker.Start(workerCtx)
 
 	logger.Info("Booking Service ready. gRPC server listening", "address", l.Addr().String())
 

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -13,6 +14,12 @@ var ErrSeatNotAvailable = errors.New("seat is not available or does not exist")
 
 type Storage struct {
 	db *pgxpool.Pool
+}
+
+type OutboxMessage struct {
+	Exchange 	string
+	RoutingKey	string
+	Payload 	[]byte
 }
 
 func New(db *pgxpool.Pool) *Storage {
@@ -76,6 +83,19 @@ func (s *Storage) CreateBooking(ctx context.Context, userID, eventID int64, seat
 	_, err = tx.Exec(ctx, "UPDATE event.seats SET status = 'RESERVED' WHERE id = ANY($1)", lockedSeatIDs)
 	if err != nil {
 		return 0, fmt.Errorf("%s: failed to update seat status: %w", op, err)
+	}
+
+	payload, _ := json.Marshal(map[string]int64{"booking_id": bookingID})
+
+	_, err = tx.Exec(
+		ctx,
+		"INSERT INTO booking.outbox_messages (exchange, routing_key, payload) VALUES ($1, $2, $3)",
+		"bookings_exchange",
+		"booking.created",
+		payload,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to save outbox message: %w", op, err)
 	}
 
 	return bookingID, tx.Commit(ctx)

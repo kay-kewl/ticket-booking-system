@@ -9,19 +9,23 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type OutboxWorker struct {
-	db		*pgxpool.Pool
-	ch 		*amqp.Channel
-	logger	*slog.Logger
-	ticker	*time.Ticker
+type ChannelProvider interface {
+	GetChannel() (*amqp.Channel, error)
 }
 
-func NewOutboxWorker(db *pgxpool.Pool, ch *amqp.Channel, logger *slog.Logger, interval time.Duration) *OutboxWorker {
+type OutboxWorker struct {
+	db			*pgxpool.Pool
+	provider 	ChannelProvider
+	logger		*slog.Logger
+	ticker		*time.Ticker
+}
+
+func NewOutboxWorker(db *pgxpool.Pool, provider ChannelProvider, logger *slog.Logger, interval time.Duration) *OutboxWorker {
 	return &OutboxWorker{
-		db:		db,
-		ch:		ch,
-		logger:	logger,
-		ticker: time.NewTicker(interval),
+		db:			db,
+		provider:	provider,
+		logger:		logger,
+		ticker: 	time.NewTicker(interval),
 	}
 }
 
@@ -42,6 +46,13 @@ func (w *OutboxWorker) Start(ctx context.Context) {
 func (w *OutboxWorker) processOutboxMessages(ctx context.Context) {
 	const op = "worker.processOutboxMessages"
 	log := w.logger.With(slog.String("op", op))
+
+	ch, err := w.provider.GetChannel()
+	if err != nil {
+		log.Error("Failed to get RabbitMQ channel, skipping iteration", "error", err)
+		return
+	}
+	defer ch.Close()
 
 	tx, err := w.db.Begin(ctx)
 	if err != nil {
@@ -79,7 +90,7 @@ func (w *OutboxWorker) processOutboxMessages(ctx context.Context) {
 			continue
 		}
 
-		err = w.ch.PublishWithContext(
+		err = ch.PublishWithContext(
 			ctx,
 			exchange,
 			routingKey,

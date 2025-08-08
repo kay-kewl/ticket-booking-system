@@ -17,6 +17,7 @@ import (
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
 	"github.com/kay-kewl/ticket-booking-system/internal/database"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
+	"github.com/kay-kewl/ticket-booking-system/internal/rabbitmq"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/service"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/storage"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/worker"
@@ -34,26 +35,45 @@ func main() {
 		os.Exit(1)
 	}
 
-	conn, err := amqp.Dial(cfg.RabbitMQURL)
+	// conn, err := amqp.Dial(cfg.RabbitMQURL)
+	// if err != nil {
+	// 	logger.Error("Failed to connect to RabbitMQ", "error", err)
+	// 	os.Exit(1)
+	// }
+	// defer conn.Close()
+	// logger.Info("Successfully connected to RabbitMQ")
+
+	// ch, err := conn.Channel()
+	// if err != nil {
+	// 	logger.Error("Failed to open a channel", "error", err)
+	// 	os.Exit(1)
+	// }
+	// defer ch.Close()
+
+	// err = setupRabbitMQTopology(ch)
+	// if err != nil {
+	// 	logger.Error("Failed to setup RabbitMQ topology", "error", err)
+	// 	os.Exit(1)
+	// }
+	// logger.Info("RabbitMQ topology setup successfully")
+
+	rabbitmqManager := rabbitmq.NewConnectionManager(cfg.RabbitMQURL, logger)
+	defer rabbitmqManager.Close()
+
+	logger.Info("Waiting for RabbitMQ connection...")
+	rabbitmqManager.WaitUntilReady()
+	logger.Info("RabbitMQ connection is ready")
+
+	setupCh, err := rabbitmqManager.GetChannel()
 	if err != nil {
-		logger.Error("Failed to connect to RabbitMQ", "error", err)
+		logger.Error("Failed to get channel for topology setup", "error", err)
 		os.Exit(1)
 	}
-	defer conn.Close()
-	logger.Info("Successfully connected to RabbitMQ")
-
-	ch, err := conn.Channel()
-	if err != nil {
-		logger.Error("Failed to open a channel", "error", err)
-		os.Exit(1)
-	}
-	defer ch.Close()
-
-	err = setupRabbitMQTopology(ch)
-	if err != nil {
+	if err := setupRabbitMQTopology(setupCh); err != nil {
 		logger.Error("Failed to setup RabbitMQ topology", "error", err)
 		os.Exit(1)
 	}
+	setupCh.Close()
 	logger.Info("RabbitMQ topology setup successfully")
 
 	dbPool, err := database.NewConnection(context.Background(), cfg.PostgresURL, logger)
@@ -73,7 +93,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	outboxWorker := worker.NewOutboxWorker(dbPool, ch, logger, 10 * time.Second)
+	outboxWorker := worker.NewOutboxWorker(dbPool, rabbitmqManager, logger, 10 * time.Second)
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()
 	go outboxWorker.Start(workerCtx)
@@ -93,35 +113,43 @@ func main() {
 	}()
 
 	go func() {
-		workerChannel, err := conn.Channel()
-		if err != nil {
-			logger.Error("Failed to open channel for worker", "error", err)
-			return
-		}
-		defer workerChannel.Close()
+		logger.Info("Starting expiration worker")
+		for {
+			ch, err := rabbitmqManager.GetChannel()
+			if err != nil {
+				logger.Error("Expiration worker: failed to get channel, retrying in 60s...", "error", err)
+				time.Sleep(60 * time.Second)
+				continue
+			}
 
-		msgs, err := workerChannel.Consume(
-			"bookings_expired_queue",
-			"",
-			false,
-			false,
-			false,
-			false,
-			nil,
-		)
-		if err != nil {
-			logger.Error("Failed to start consumer", "error", err)
-			return
-		}
+			msgs, err := ch.Consume(
+				"bookings_expired_queue",
+				"",
+				false,
+				false,
+				false,
+				false,
+				nil,
+			)
+			if err != nil {
+				logger.Error("Expiration worker: failed to start consumer, retrying in 60s...", "error", err)
+				ch.Close()
+				time.Sleep(60 * time.Second)
+				continue
+			}
 
-		logger.Info("Expiration worker started. Waiting for messages...")
+			logger.Info("Expiration worker started. Waiting for messages...")
 
-		for d := range msgs {
-			logger.Info("Received an expired booking message", "body", string(d.Body))
+			for d := range msgs {
+				logger.Info("Received an expired booking message", "body", string(d.Body))
 
-			// TODO: parse json, get booking_id, cancel reservation
+				// TODO: parse json, get booking_id, cancel reservation
 
-			d.Ack(false)
+				d.Ack(false)
+			}
+
+			logger.Warn("Expiration worker: message channel closed. Reconnecting..")
+			ch.Close()
 		}
 	}()
 
@@ -156,7 +184,7 @@ func setupRabbitMQTopology(ch *amqp.Channel) error {
 	}
 
 	_, err = ch.QueueDeclare("bookings_delay_15m", true, false, false, false, amqp.Table{
-		"x-message-ttl":			90000,
+		"x-message-ttl":			900000,
 		"x-dead-letter-exchange":	"bookings_dlx",
 	})
 	if err != nil {

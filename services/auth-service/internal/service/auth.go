@@ -76,7 +76,7 @@ func (a *Auth) Login(ctx context.Context, email string, password string) (string
 
 	if err := bcrypt.CompareHashAndPassword(passHash, []byte(password)); err != nil {
 		// TODO: wrong password error
-		return "", fmt.Errorf("%s: invalid credentials", op)
+		return "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{

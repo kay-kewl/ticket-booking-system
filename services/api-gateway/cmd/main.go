@@ -32,16 +32,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+	defer cancel()
+
 	authServiceAddr := fmt.Sprintf("auth-service:%s", cfg.AuthGRPCPort)
-	authServiceConn, err := grpc.NewClient(authServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	authServiceConn, err := grpc.DialContext(
+		ctx, 
+		authServiceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
 	if err != nil {
 		logger.Error("Failed to connect to auth-service", "error", err)
 		os.Exit(1)
 	}
 	defer authServiceConn.Close()
-
 	authClient := authv1.NewAuthClient(authServiceConn)
-
 	logger.Info("gRPC connection to auth-service established")
 
 	// dbPool, err := database.NewConnection(context.Background(), cfg.PostgresURL, logger)
@@ -52,19 +58,27 @@ func main() {
 	// defer dbPool.Close()
 
 	eventServiceAddr := fmt.Sprintf("event-service:%s", cfg.EventGRPCPort)
-	eventServiceConn, err := grpc.NewClient(eventServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	eventServiceConn, err := grpc.DialContext(
+		ctx,
+		eventServiceAddr, 
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
 	if err != nil {
 		logger.Error("Failed to connect to event-service", "error", err)
 		os.Exit(1)
 	}
 	defer eventServiceConn.Close()
-
 	eventClient := eventv1.NewEventServiceClient(eventServiceConn)
-
 	logger.Info("gRPC connection to event-service established")
 
 	bookingServiceAddr := fmt.Sprintf("booking-service:%s", cfg.BookingGRPCPort)
-	bookingServiceConn, err := grpc.NewClient(bookingServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	bookingServiceConn, err := grpc.DialContext(
+		ctx,
+		bookingServiceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
 	if err != nil {
 		logger.Error("Failed to connect to booking-service", slog.String("addr", bookingServiceAddr), "error", err)
 		os.Exit(1)
@@ -108,7 +122,7 @@ func main() {
 	<-quit
 	logger.Info("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 5 * time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {

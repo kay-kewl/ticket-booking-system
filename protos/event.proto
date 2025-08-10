@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package event;
 
-option go_package = "./event";
+option go_package = "./gen/go/event;eventv1";
 
 message Event {
 	int64 id = 1;

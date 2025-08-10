@@ -4,7 +4,7 @@
 // 	protoc        v3.21.12
 // source: event.proto
 
-package event
+package eventv1
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -175,7 +175,7 @@ const file_event_proto_rawDesc = "" +
 	"\x06events\x18\x01 \x03(\v2\f.event.EventR\x06events2Q\n" +
 	"\fEventService\x12A\n" +
 	"\n" +
-	"ListEvents\x12\x18.event.ListEventsRequest\x1a\x19.event.ListEventsResponseB\tZ\a./eventb\x06proto3"
+	"ListEvents\x12\x18.event.ListEventsRequest\x1a\x19.event.ListEventsResponseB\x18Z\x16./gen/go/event;eventv1b\x06proto3"
 
 var (
 	file_event_proto_rawDescOnce sync.Once

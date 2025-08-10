@@ -35,9 +35,12 @@ func (s *Storage) CreateBooking(ctx context.Context, userID, eventID int64, seat
 	}
 	defer tx.Rollback(ctx)
 
-	rows, err := tx.Query(ctx,
-						  "SELECT id FROM event.seats WHERE id = ANY($1) AND status = 'AVAILABLE' FOR UPDATE",
-						  seatIDs)
+	rows, err := tx.Query(
+		ctx,
+		"SELECT id FROM event.seats WHERE id = ANY($1) AND event_id = $2 AND status = 'AVAILABLE' FOR UPDATE",
+		seatIDs,
+		eventID,
+	)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, pgErr) {
@@ -61,20 +64,23 @@ func (s *Storage) CreateBooking(ctx context.Context, userID, eventID int64, seat
 	}
 
 	var bookingID int64
-	err = tx.QueryRow(ctx,
-					  "INSERT INTO booking.bookings(user_id, event_id, status) VALUES($1, $2, 'PENDING') RETURNING id",
-					  userID,
-					  eventID,
-					  ).Scan(&bookingID)
+	err = tx.QueryRow(
+		ctx,
+		"INSERT INTO booking.bookings(user_id, event_id, status) VALUES($1, $2, 'PENDING') RETURNING id",
+		userID,
+		eventID,
+	).Scan(&bookingID)
 	if err != nil {
 		return 0, fmt.Errorf("%s: failed to create booking: %w", op, err)
 	}
 
 	for _, seatID := range lockedSeatIDs {
-		_, err = tx.Exec(ctx,
-						 "INSERT INTO booking.booking_seats(booking_id, seat_id) VALUES($1, $2)",
-						 bookingID,
-						 seatID)
+		_, err = tx.Exec(
+			ctx,
+			"INSERT INTO booking.booking_seats(booking_id, seat_id) VALUES($1, $2)",
+			bookingID,
+			seatID,
+		)
 		if err != nil {
 			return 0, fmt.Errorf("%s: failed to link seat to booking: %w", op, err)
 		}

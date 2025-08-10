@@ -4,7 +4,7 @@
 // - protoc             v3.21.12
 // source: booking.proto
 
-package booking
+package bookingv1
 
 import (
 	context "context"

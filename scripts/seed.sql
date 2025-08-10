@@ -4,8 +4,8 @@ TRUNCATE TABLE event.events RESTART IDENTITY CASCADE;
 TRUNCATE TABLE event.seats RESTART IDENTITY CASCADE;
 
 INSERT INTO auth.users (email, password_hash) VALUES 
-('user@example.com', 'aaa'),
-('admin@example.com', 'abc');
+('user@example.com', '$2a$10$8TCbWfBDTxXcuQxputWNwO.shYCNWKMcgMDhAnLDhmJ0Pronahw9W'),
+('admin@example.com', '$2a$10$wje9HxGHD/qTZFN/LVZ8h.HBfeABrWGrLBxrSnqRN9mlFgJdKPanK');
 
 INSERT INTO event.events (title, description) VALUES
 ('Shrek', 'A mean lord exiles fairytale creatures to the swamp of a grumpy ogre, who must go on a quest and rescue a princess for the lord in order to get his land back.'),

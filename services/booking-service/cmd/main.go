@@ -145,7 +145,9 @@ func main() {
 
 				// TODO: parse json, get booking_id, cancel reservation
 
-				d.Ack(false)
+				if err := d.Ack(false); err != nil {
+					logger.Error("Failed to acknowledge message", "error", err)
+				}
 			}
 
 			logger.Warn("Expiration worker: message channel closed. Reconnecting..")

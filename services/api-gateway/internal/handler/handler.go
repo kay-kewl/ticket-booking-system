@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -52,7 +51,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	log.Info("Making gRPC call to auth.Register", slog.String("email", req.Email))
 
-	grpcResp, err := h.authClient.Register(context.Background(), &authv1.RegisterRequest{
+	grpcResp, err := h.authClient.Register(r.Context(), &authv1.RegisterRequest{
 		Email:		req.Email,
 		Password:	req.Password,
 	})
@@ -60,9 +59,18 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// TODO: gRPC errors to HTTP statuses
 		if st, ok := status.FromError(err); ok {
-			if st.Code() == codes.AlreadyExists {
+			switch st.Code() {
+			case codes.InvalidArgument:
+				log.Warn("Invalid argument for registration", "email", req.Email, "error", st.Message())
+				http.Error(w, st.Message(), http.StatusBadRequest)
+				return
+			case codes.AlreadyExists:
 				log.Warn("Attempt to register existing user", "email", req.Email)
 				http.Error(w, "user with this email already exists", http.StatusConflict)
+				return
+			default:
+				log.Error("gRPC call failed with unhandled status", "status", st.Code(), "error", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -96,7 +104,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcResp, err := h.authClient.Login(context.Background(), &authv1.LoginRequest{
+	grpcResp, err := h.authClient.Login(r.Context(), &authv1.LoginRequest{
 		Email:		req.Email,
 		Password:	req.Password,
 	})
@@ -125,6 +133,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "missing authorization header", http.StatusUnauthorized)
+		return
 	}
 
 	headerParts := strings.Split(authHeader, " ")
@@ -136,7 +145,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 
 	token := headerParts[1]
 
-	validateResp, err := h.authClient.ValidateToken(context.Background(), &authv1.ValidateTokenRequest{Token: token})
+	validateResp, err := h.authClient.ValidateToken(r.Context(), &authv1.ValidateTokenRequest{Token: token})
 	if err != nil {
 		log.Error("Token validation failed", "error", err)
 		http.Error(w, "invalid token", http.StatusUnauthorized)
@@ -151,7 +160,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bookingResp, err := h.bookingClient.CreateBooking(context.Background(), &bookingv1.CreateBookingRequest{
+	bookingResp, err := h.bookingClient.CreateBooking(r.Context(), &bookingv1.CreateBookingRequest{
 		UserId:		userID,
 		EventId:	req.EventID,
 		SeatIds:	req.SeatIDs,
@@ -178,7 +187,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	log := h.logger.With(slog.String("op", "handler.ListEvents"))
 
-	grpcResp, err := h.eventClient.ListEvents(context.Background(), &eventv1.ListEventsRequest{})
+	grpcResp, err := h.eventClient.ListEvents(r.Context(), &eventv1.ListEventsRequest{})
 	if err != nil {
 		log.Error("gRPC call to event-service failed", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)

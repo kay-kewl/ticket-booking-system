@@ -23,16 +23,18 @@ type UserProvider interface {
 }
 
 type Auth struct {
-	userSaver		UserSaver
-	userProvider 	UserProvider
+	jwtSecret		[]byte
 	tokenTTL		time.Duration
+	userProvider 	UserProvider
+	userSaver		UserSaver
 }
 
-func New(userSaver UserSaver, userProvider UserProvider, tokenTTL time.Duration) *Auth {
+func New(jwtSecret string, tokenTTL time.Duration, userProvider UserProvider, userSaver UserSaver) *Auth {
 	return &Auth{
-		userSaver:		userSaver,
-		userProvider: 	userProvider,
+		jwtSecret:		[]byte(jwtSecret),
 		tokenTTL:		tokenTTL,
+		userProvider: 	userProvider,
+		userSaver:		userSaver,
 	}
 }
 
@@ -79,7 +81,7 @@ func (a *Auth) Login(ctx context.Context, email string, password string) (string
 	})
 
 	// TODO: hide the secret
-	tokenString, err := token.SignedString([]byte("my-secret"))
+	tokenString, err := token.SignedString(a.jwtSecret)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
@@ -92,10 +94,10 @@ func (a *Auth) ValidateToken(ctx context.Context, tokenString string) (int64, er
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %w", token.Header["alg"])
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
 
-		return []byte("my-secret"), nil
+		return a.jwtSecret, nil
 	})
 
 	if err != nil {

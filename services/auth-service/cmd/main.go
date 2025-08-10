@@ -40,7 +40,7 @@ func main() {
 	defer dbPool.Close()
 
 	authStorage := storage.New(dbPool)
-	authService := service.New(authStorage, authStorage, 1 * time.Hour)
+	authService := service.New(cfg.JWTSecret, 1 * time.Hour, authStorage, authStorage)
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.AuthGRPCPort))
 	if err != nil {

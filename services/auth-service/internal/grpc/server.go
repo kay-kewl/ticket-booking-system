@@ -43,7 +43,10 @@ func (s *serverAPI) Register(ctx context.Context, req *authv1.RegisterRequest) (
 func (s *serverAPI) Login(ctx context.Context, req *authv1.LoginRequest) (*authv1.LoginResponse, error) {
 	token, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
-		return nil, err
+		if errors.Is(err, service.ErrInvalidCredentials) {
+			return nil, status.Error(codes.Unauthenticated, "invalid email or password")
+		}
+		return nil, status.Error(codes.Internal, "failed to login")
 	}
 
 	return &authv1.LoginResponse{Token: token}, nil

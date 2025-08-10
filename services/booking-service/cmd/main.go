@@ -144,6 +144,19 @@ func main() {
 				logger.Info("Received an expired booking message", "body", string(d.Body))
 
 				// TODO: parse json, get booking_id, cancel reservation
+				// var msgBody map[string]int64
+				// if err := json.Unmarshal(d.Body, &msgBody); err != nil {
+				// 	logger.Error("Failed to unmarshal expiration message", "error", err)
+				// 	_ = d.Nack(false, false)
+				// 	continue
+				// }
+
+				// bookingID, ok := msgBody["booking_id"]
+				// if !ok {
+				// 	logger.Error("Invalid message format: no booking_id", "body", string(b.Body))
+				// 	_ = d.Nack(false, false)
+				// 	continue
+				// }
 
 				if err := d.Ack(false); err != nil {
 					logger.Error("Failed to acknowledge message", "error", err)

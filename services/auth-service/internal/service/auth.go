@@ -13,6 +13,7 @@ import (
 )
 
 var ErrUserExists = errors.New("user already exists")
+var ErrInvalidCredentials = errors.New("invalid credentials")
 
 type UserSaver interface {
 	SaveUser(ctx context.Context, email string, passHash []byte) (int64, error)
@@ -67,6 +68,9 @@ func (a *Auth) Login(ctx context.Context, email string, password string) (string
 	id, passHash, err := a.userProvider.User(ctx, email)
 	if err != nil {
 		// TODO: not found error
+		if errors.Is(err, storage.ErrUserNotFound) {
+			return "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+		}
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 

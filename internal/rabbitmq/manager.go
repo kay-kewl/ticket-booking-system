@@ -39,7 +39,7 @@ func (m *ConnectionManager) handleReconnect() {
 			m.logger.Info("Connection manager stopped")
 			return
 		default:
-			if m.isConnected() {
+			if !m.isConnected() {
 				m.logger.Info("Attempting to connect to RabbitMQ...")
 				if err := m.connect(); err != nil {
 					m.logger.Error("Failed to connect, retrying...", "error", err)
@@ -81,8 +81,8 @@ func (m *ConnectionManager) connect() error {
 }
 
 func (m *ConnectionManager) GetChannel() (*amqp.Channel, error) {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	if m.connection == nil {
 		return nil, errors.New("connection is not established")
@@ -92,14 +92,14 @@ func (m *ConnectionManager) GetChannel() (*amqp.Channel, error) {
 }
 
 func (m *ConnectionManager) isConnected() bool {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	return m.connection != nil && !m.connection.IsClosed()
 }
 
 func (m *ConnectionManager) setConnection(conn *amqp.Connection) {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	m.connection = conn
 }
 

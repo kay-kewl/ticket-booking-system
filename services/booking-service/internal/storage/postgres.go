@@ -43,7 +43,7 @@ func (s *Storage) CreateBooking(ctx context.Context, userID, eventID int64, seat
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, pgErr) {
+		if errors.As(err, &pgErr) {
 			return 0, fmt.Errorf("%s: %w", op, ErrSeatNotAvailable)
 		}
 		return 0, fmt.Errorf("%s: failed to lock seats: %w", op, err)

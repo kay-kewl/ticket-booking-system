@@ -10,6 +10,7 @@ import (
 )
 
 var ErrUserExists = errors.New("user with this email already exists")
+var ErrUserNotFound = errors.New("user with this email is not found")
 
 type Storage struct {
 	db *pgxpool.Pool
@@ -48,6 +49,9 @@ func (s *Storage) User(ctx context.Context, email string) (int64, []byte, error)
 	err := s.db.QueryRow(ctx, query, email).Scan(&id, &passHash)
 	if err != nil {
 		// TODO: pgx.ErrNoRows
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, fmt.Errorf("%s: %w", op, ErrUserNotFound)
+		}
 		return 0, nil, fmt.Errorf("%s: %w", op, err)
 	}
 

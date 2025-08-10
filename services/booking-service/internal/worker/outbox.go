@@ -99,6 +99,7 @@ func (w *OutboxWorker) processOutboxMessages(ctx context.Context) {
 			amqp.Publishing{
 				ContentType: 	"application/json",
 				Body:			payload,
+				DeliveryMode:	amqp.Persistent,
 			},
 		)
 		if err != nil {

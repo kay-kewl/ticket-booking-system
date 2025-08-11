@@ -34,6 +34,20 @@ services:
     networks:
       - booking-net
 
+  migrator:
+    build:
+      context: .
+      dockerfile: docker/migrator/Dockerfile
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_completed_successfully
+
   api-gateway:
     # container_name: api_gateway
     build:
@@ -55,8 +69,6 @@ services:
     # volumes:
     #   - .:/app
     depends_on:
-      postgres:
-        condition: service_healthy
       auth-service:
         condition: service_started
       event-service:
@@ -87,8 +99,8 @@ services:
     #   - .:/app
     # command: sh -c "PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -h postgres -d $${POSTGRES_DB} -c \"CREATE SCHEMA IF NOT EXISTS $${DATABASE_SCHEMA};\" && migrate -path /app/migrations -database \"postgres://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres:$${POSTGRES_PORT}/$${POSTGRES_DB}?sslmode=disable&search_path=$${DATABASE_SCHEMA}\" -verbose up && /app/server"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     networks:
       - booking-net
 
@@ -112,8 +124,8 @@ services:
     #   - ./services/event-service/migrations:/app/migrations
     # command: sh -c "PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -h postgres -d $${POSTGRES_DB} -c \"CREATE SCHEMA IF NOT EXISTS $${DATABASE_SCHEMA};\" && migrate -path /app/migrations -database \"postgres://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres:$${POSTGRES_PORT}/$${POSTGRES_DB}?sslmode=disable&search_path=$${DATABASE_SCHEMA}\" -verbose up && /app/server"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     networks:
       - booking-net
 
@@ -137,17 +149,12 @@ services:
     #   - ./services/booking-service/migrations:/app/migrations
     # command: sh -c "PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -h postgres -d $${POSTGRES_DB} -c \"CREATE SCHEMA IF NOT EXISTS $${DATABASE_SCHEMA};\" && migrate -path /app/migrations -database \"postgres://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres:$${POSTGRES_PORT}/$${POSTGRES_DB}?sslmode=disable&search_path=$${DATABASE_SCHEMA}\" -verbose up && /app/server"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
-      auth-service:
-        condition: service_started
-      event-service:
-        condition: service_started
     networks:
       - booking-net
-
 
 volumes:
   pgdata:

@@ -22,10 +22,20 @@ func Register(gRPCServer *grpc.Server, events Events) {
 }
 
 func (s *serverAPI) ListEvents(ctx context.Context, req *eventv1.ListEventsRequest) (*eventv1.ListEventsResponse, error) {
-	events, err := s.events.ListEvents(ctx)
-	if err != nil {
-		return nil, err
+	pageNumber := req.GetPageNumber()
+	if pageNumber < 1 {
+		pageNumber = 1
 	}
 
-	return &eventv1.ListEventsResponse{Events: events}, nil
+	pageSize := req.GetPageSize()
+	if pageSize < 1 {
+		pageSize = 10
+	}
+
+	events, totalCount, err := s.events.ListEvents(ctx, pageNumber, pageSize)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to list events")
+	}
+
+	return &eventv1.ListEventsResponse{Events: events, TotalCount: totalCount}, nil
 }

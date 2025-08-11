@@ -83,6 +83,8 @@ func (x *Event) GetDescription() string {
 
 type ListEventsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	PageNumber    int32                  `protobuf:"varint,1,opt,name=page_number,json=pageNumber,proto3" json:"page_number,omitempty"`
+	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -117,9 +119,24 @@ func (*ListEventsRequest) Descriptor() ([]byte, []int) {
 	return file_event_proto_rawDescGZIP(), []int{1}
 }
 
+func (x *ListEventsRequest) GetPageNumber() int32 {
+	if x != nil {
+		return x.PageNumber
+	}
+	return 0
+}
+
+func (x *ListEventsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
 type ListEventsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Events        []*Event               `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	TotalCount    int64                  `protobuf:"varint,2,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -161,6 +178,13 @@ func (x *ListEventsResponse) GetEvents() []*Event {
 	return nil
 }
 
+func (x *ListEventsResponse) GetTotalCount() int64 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
 var File_event_proto protoreflect.FileDescriptor
 
 const file_event_proto_rawDesc = "" +
@@ -169,13 +193,18 @@ const file_event_proto_rawDesc = "" +
 	"\x05Event\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"\x13\n" +
-	"\x11ListEventsRequest\":\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"Q\n" +
+	"\x11ListEventsRequest\x12\x1f\n" +
+	"\vpage_number\x18\x01 \x01(\x05R\n" +
+	"pageNumber\x12\x1b\n" +
+	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\"[\n" +
 	"\x12ListEventsResponse\x12$\n" +
-	"\x06events\x18\x01 \x03(\v2\f.event.EventR\x06events2Q\n" +
+	"\x06events\x18\x01 \x03(\v2\f.event.EventR\x06events\x12\x1f\n" +
+	"\vtotal_count\x18\x02 \x01(\x03R\n" +
+	"totalCount2Q\n" +
 	"\fEventService\x12A\n" +
 	"\n" +
-	"ListEvents\x12\x18.event.ListEventsRequest\x1a\x19.event.ListEventsResponseB\x18Z\x16./gen/go/event;eventv1b\x06proto3"
+	"ListEvents\x12\x18.event.ListEventsRequest\x1a\x19.event.ListEventsResponseB\x11Z\x0f./event;eventv1b\x06proto3"
 
 var (
 	file_event_proto_rawDescOnce sync.Once

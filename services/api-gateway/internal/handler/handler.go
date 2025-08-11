@@ -187,7 +187,13 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	log := h.logger.With(slog.String("op", "handler.ListEvents"))
 
-	grpcResp, err := h.eventClient.ListEvents(r.Context(), &eventv1.ListEventsRequest{})
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
+
+	grpcResp, err := h.eventClient.ListEvents(r.Context(), &eventv1.ListEventsRequest{
+		PageNumber:	int32(page),
+		PageSize:	int32(size),
+	})
 	if err != nil {
 		log.Error("gRPC call to event-service failed", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -196,5 +202,5 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(grpcResp.GetEvents())
+	json.NewEncoder(w).Encode(grpcResp)
 }

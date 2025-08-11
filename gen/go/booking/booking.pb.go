@@ -138,7 +138,7 @@ const file_booking_proto_rawDesc = "" +
 	"\n" +
 	"booking_id\x18\x01 \x01(\x03R\tbookingId2`\n" +
 	"\x0eBookingService\x12N\n" +
-	"\rCreateBooking\x12\x1d.booking.CreateBookingRequest\x1a\x1e.booking.CreateBookingResponseB\x1cZ\x1a./gen/go/booking;bookingv1b\x06proto3"
+	"\rCreateBooking\x12\x1d.booking.CreateBookingRequest\x1a\x1e.booking.CreateBookingResponseB\x15Z\x13./booking;bookingv1b\x06proto3"
 
 var (
 	file_booking_proto_rawDescOnce sync.Once

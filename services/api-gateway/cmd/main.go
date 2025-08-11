@@ -12,6 +12,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	_ "google.golang.org/grpc/health"
 
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
 	bookingv1 "github.com/kay-kewl/ticket-booking-system/gen/go/booking"
@@ -32,40 +33,44 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
-	defer cancel()
+	// ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+	// defer cancel()
+
+	retryPolicy := `{
+		"methodConfig": [{
+			"name": [{}]
+			"retryPolicy": {
+				"MaxAttempts": 5,
+				"InitialBackoff": "0.1s",
+				"MaxBackoff": "5s",
+				"BackoffMultiplier": 2.0,
+				"RetryableStatusCode": [ "UNAVAILABLE" ]
+			}
+		}]
+	}`
 
 	authServiceAddr := fmt.Sprintf("auth-service:%s", cfg.AuthGRPCPort)
-	authServiceConn, err := grpc.DialContext(
-		ctx, 
+	authServiceConn, err := grpc.Dial(
 		authServiceAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
+		grpc.WithDefaultServiceConfig(retryPolicy),
 	)
 	if err != nil {
-		logger.Error("Failed to connect to auth-service", "error", err)
+		logger.Error("Failed to dial auth-service", "error", err)
 		os.Exit(1)
 	}
 	defer authServiceConn.Close()
 	authClient := authv1.NewAuthClient(authServiceConn)
 	logger.Info("gRPC connection to auth-service established")
 
-	// dbPool, err := database.NewConnection(context.Background(), cfg.PostgresURL, logger)
-	// if err != nil {
-	// 	logger.Error("Failed to connect to database", "error", err)
-	// 	os.Exit(1)
-	// }
-	// defer dbPool.Close()
-
 	eventServiceAddr := fmt.Sprintf("event-service:%s", cfg.EventGRPCPort)
-	eventServiceConn, err := grpc.DialContext(
-		ctx,
+	eventServiceConn, err := grpc.Dial(
 		eventServiceAddr, 
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
+		grpc.WithDefaultServiceConfig(retryPolicy),
 	)
 	if err != nil {
-		logger.Error("Failed to connect to event-service", "error", err)
+		logger.Error("Failed to dial event-service", "error", err)
 		os.Exit(1)
 	}
 	defer eventServiceConn.Close()
@@ -73,14 +78,13 @@ func main() {
 	logger.Info("gRPC connection to event-service established")
 
 	bookingServiceAddr := fmt.Sprintf("booking-service:%s", cfg.BookingGRPCPort)
-	bookingServiceConn, err := grpc.DialContext(
-		ctx,
+	bookingServiceConn, err := grpc.Dial(
 		bookingServiceAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
+		grpc.WithDefaultServiceConfig(retryPolicy),
 	)
 	if err != nil {
-		logger.Error("Failed to connect to booking-service", slog.String("addr", bookingServiceAddr), "error", err)
+		logger.Error("Failed to dial booking-service", slog.String("addr", bookingServiceAddr), "error", err)
 		os.Exit(1)
 	}
 	defer bookingServiceConn.Close()
@@ -106,8 +110,11 @@ func main() {
 	// })
 
 	srv := &http.Server{
-		Addr: 		":" + cfg.APIPort,
-		Handler: 	mux,
+		Addr: 			":" + cfg.APIPort,
+		Handler: 		mux,
+		IdleTimeout:	300 * time.Second,
+		ReadTimeout:	10 * time.Second,
+		WriteTimeout:	10 * time.Second
 	}
 
 	go func() {

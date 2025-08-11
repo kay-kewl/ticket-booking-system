@@ -17,12 +17,19 @@ func New(db *pgxpool.Pool) *Storage {
 	return &Storage{db: db}
 }
 
-func (s *Storage) ListEvents(ctx context.Context) ([]*eventv1.Event, error) {
+func (s *Storage) ListEvents(ctx context.Context, pageNumber, pageSize int32) ([]*eventv1.Event, int64, error) {
 	const op = "storage.ListEvents"
 
-	rows, err := s.db.Query(ctx, "SELECT id, title, description FROM event.events ORDER BY created_at DESC")
+	var totalCount int64
+	if err := s.db.Query(ctx, "SELECT COUNT(*) FROM event.events").Scan(&totalCount); err != nil {
+		return nil, 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	offset := (pageNumber - 1) * pageSize
+
+	rows, err := s.db.Query(ctx, "SELECT id, title, description FROM event.events ORDER BY created_at DESC LIMIT $1 OFFSET $2", pageSize, offset)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", op, err)
+		return nil, 0, fmt.Errorf("%s: %w", op, err)
 	}
 	defer rows.Close()
 
@@ -30,10 +37,10 @@ func (s *Storage) ListEvents(ctx context.Context) ([]*eventv1.Event, error) {
 	for rows.Next() {
 		var event eventv1.Event
 		if err := rows.Scan(&event.Id, &event.Title, &event.Description); err != nil {
-			return nil, fmt.Errorf("%s: %w", op, err)
+			return nil, 0, fmt.Errorf("%s: %w", op, err)
 		}
 		events = append(events, &event)
 	}
 
-	return events, nil
+	return events, totalCount, nil
 }

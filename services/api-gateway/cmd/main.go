@@ -38,13 +38,13 @@ func main() {
 
 	retryPolicy := `{
 		"methodConfig": [{
-			"name": [{}]
+			"name": [{}],
 			"retryPolicy": {
-				"MaxAttempts": 5,
-				"InitialBackoff": "0.1s",
-				"MaxBackoff": "5s",
-				"BackoffMultiplier": 2.0,
-				"RetryableStatusCode": [ "UNAVAILABLE" ]
+				"maxAttempts": 5,
+				"initialBackoff": "0.1s",
+				"maxBackoff": "5s",
+				"backoffMultiplier": 2.0,
+				"retryableStatusCodes": [ "UNAVAILABLE" ]
 			}
 		}]
 	}`
@@ -114,7 +114,7 @@ func main() {
 		Handler: 		mux,
 		IdleTimeout:	300 * time.Second,
 		ReadTimeout:	10 * time.Second,
-		WriteTimeout:	10 * time.Second
+		WriteTimeout:	10 * time.Second,
 	}
 
 	go func() {
@@ -129,7 +129,7 @@ func main() {
 	<-quit
 	logger.Info("Shutting down server...")
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {

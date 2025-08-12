@@ -4,12 +4,14 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
 )
 
 type Events interface {
-	ListEvents(ctx context.Context) ([]*eventv1.Event, error)
+	ListEvents(ctx context.Context, pageNumber, pageSize int32) ([]*eventv1.Event, int64, error)
 }
 
 type serverAPI struct {

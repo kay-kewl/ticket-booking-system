@@ -10,20 +10,21 @@ import (
 )
 
 type ConnectionManager struct {
-	logger		*slog.Logger
-	url			string
 	connection 	*amqp.Connection
-	mutex		sync.RWMutex
-	ready		chan bool
 	done		chan bool
+	logger		*slog.Logger
+	mutex		sync.RWMutex
+	once  		sync.Once
+	ready		chan bool
+	url			string
 }
 
 func NewConnectionManager(url string, logger *slog.Logger) *ConnectionManager {
 	m := &ConnectionManager{
-		logger: 	logger.With(slog.String("component", "RabbitMQManager")),
-		url:		url,
-		ready:		make(chan bool),
 		done:		make(chan bool),
+		logger: 	logger.With(slog.String("component", "RabbitMQManager")),
+		ready:		make(chan bool, 1),
+		url:		url,
 	}
 
 	go m.handleReconnect()
@@ -32,6 +33,9 @@ func NewConnectionManager(url string, logger *slog.Logger) *ConnectionManager {
 
 func (m *ConnectionManager) handleReconnect() {
 	m.logger.Info("Connection manager started")
+
+	const maxBackoff = 5 * time.Minute
+	backoff := 1 * time.Second
 
 	for {
 		select {
@@ -42,11 +46,16 @@ func (m *ConnectionManager) handleReconnect() {
 			if !m.isConnected() {
 				m.logger.Info("Attempting to connect to RabbitMQ...")
 				if err := m.connect(); err != nil {
-					m.logger.Error("Failed to connect, retrying...", "error", err)
-					time.Sleep(60 * time.Second)
+					m.logger.Error("Failed to connect, retrying...", "error", err, "next_try_in", backoff)
+					time.Sleep(backoff)
+					backoff *= 2
+					if backoff > maxBackoff {
+						backoff = maxBackoff
+					}
 					continue
 				}
 				m.logger.Info("Connection established!")
+				backoff = 1 * time.Second
 				select {
 				case m.ready <- true:
 				default:
@@ -55,13 +64,12 @@ func (m *ConnectionManager) handleReconnect() {
 		}
 
 		if m.isConnected() {
-			notifyClose := make(chan *amqp.Error)
+			notifyClose := make(chan *amqp.Error, 1)
 			m.connection.NotifyClose(notifyClose)
 
 			select {
 			case <-m.done:
 				m.logger.Info("Connection manager stopping while connected")
-				m.Close()
 				return
 			case err := <-notifyClose:
 				m.logger.Warn("Connection lost. Reconnecting...", "error", err)
@@ -104,13 +112,17 @@ func (m *ConnectionManager) setConnection(conn *amqp.Connection) {
 }
 
 func (m *ConnectionManager) Close() {
-	close(m.done)
-	if m.isConnected() {
-		m.logger.Info("Closing RabbitMQ connection")
-		if err := m.connection.Close(); err != nil {
-			m.logger.Error("Failed to close connection", "error", err)
+	m.once.Do(
+		func() {
+			close(m.done)
+			if m.isConnected() {
+				m.logger.Info("Closing RabbitMQ connection")
+				if err := m.connection.Close(); err != nil {
+					m.logger.Error("Failed to close connection", "error", err)
+				}
+			}
 		}
-	}
+	)
 }
 
 func (m *ConnectionManager) WaitUntilReady() {

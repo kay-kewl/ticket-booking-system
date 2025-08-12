@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -37,7 +38,7 @@ func (s *Storage) CreateBooking(ctx context.Context, userID, eventID int64, seat
 
 	rows, err := tx.Query(
 		ctx,
-		"SELECT id FROM event.seats WHERE id = ANY($1) AND event_id = $2 AND status = 'AVAILABLE' FOR UPDATE",
+		"SELECT id FROM event.seats WHERE id = ANY($1) AND event_id = $2 AND status = 'AVAILABLE' ORDER BY id FOR UPDATE",
 		seatIDs,
 		eventID,
 	)
@@ -95,14 +96,49 @@ func (s *Storage) CreateBooking(ctx context.Context, userID, eventID int64, seat
 
 	_, err = tx.Exec(
 		ctx,
-		"INSERT INTO booking.outbox_messages (exchange, routing_key, payload) VALUES ($1, $2, $3)",
+		"INSERT INTO booking.outbox_messages (exchange, routing_key, payload) VALUES ($1, $2, $3::jsonb)",
 		"bookings_exchange",
 		"booking.created",
-		payload,
+		string(payload),
 	)
 	if err != nil {
 		return 0, fmt.Errorf("%s: failed to save outbox message: %w", op, err)
 	}
 
 	return bookingID, tx.Commit(ctx)
+}
+
+func (s *Storage) CancelExpiredBooking(ctx context.Context, bookingID int64) error {
+	const op = "storage.CancelExpiredBooking"
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	defer tx.Rollback(ctx)
+
+	var id int64
+	err = tx.QueryRow(
+		ctx,
+		"UPDATE booking.bookings SET status = 'CANCELLED' WHERE id = $1 AND status = 'PENDING' RETURNING id",
+		bookingID,
+	).Scan(&id)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("%s: failed to update booking status: %w", op, err)
+	}
+
+	_, err = tx.Exec(
+		ctx,
+		"UPDATE event.seats SET status = 'AVAILABLE' WHERE id IN (SELECT seat_id FROM booking.booking_seats WHERE booking_id = $1)",
+		bookingID,
+	)
+	if err != nil {
+		return fmt.Errorf("%s: failed to release seats: %w", op, err)
+	}
+
+	return tx.Commit(ctx)
 }

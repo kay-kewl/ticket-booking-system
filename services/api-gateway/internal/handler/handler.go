@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
@@ -12,7 +13,10 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"github.com/go-playground/validator/v10"
 )
+
+var validate = validator.New()
 
 type Handler struct {
 	authClient		authv1.AuthClient
@@ -31,14 +35,15 @@ func New(authClient authv1.AuthClient, bookingClient bookingv1.BookingServiceCli
 }
 
 type RegisterRequest struct {
-	Email 		string `json:"email"`
-	Password	string `json:"password"`
+	Email 		string `json:"email" validate:"required,email"`
+	Password	string `json:"password" validate:"required,min=8"`
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	const op = "handler.Register"
 
 	log := h.logger.With(slog.String("op", op))
+	r.Body = http.MaxBytesReader(w, r.Body, 1024 * 1024)
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -48,6 +53,11 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: validate email and password
+	if err := validate.Struct(req); err != nil {
+		log.Warn("Invalid request body for registration", "error", err)
+		http.Error(w, "invalid request: " + err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	log.Info("Making gRPC call to auth.Register", slog.String("email", req.Email))
 
@@ -89,18 +99,25 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 type LoginRequest struct {
-	Email		string `json:"email"`
-	Password	string `json:"password"`
+	Email		string `json:"email" validate:"required,email"`
+	Password	string `json:"password" validate:"required"`
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	const op = "handler.Login"
 	log := h.logger.With(slog.String("op", op))
+	r.Body = http.MaxBytesReader(w, r.Body, 1024 * 1024)
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error("Failed to decode request body", "error", err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		log.Warn("Invalid request for body login", "error", err)
+		http.Error(w, "invalid request: " + err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -121,14 +138,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateBookingRequest struct {
-	EventID int64 `json:"event_id"`
-	SeatIDs []int64 `json:"seat_ids"`
+	EventID int64 `json:"event_id" validate:"required"`
+	SeatIDs []int64 `json:"seat_ids" validate:"required"`
 }
 
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	const op = "handler.CreateBooking"
 
 	log := h.logger.With(slog.String("op", op))
+	r.Body = http.MaxBytesReader(w, r.Body, 1024 * 1024)
 
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -160,6 +178,12 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := validate.Struct(req); err != nil {
+		log.Warn("Invalid request for body create booking", "error", err)
+		http.Error(w, "invalid request: " + err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	bookingResp, err := h.bookingClient.CreateBooking(r.Context(), &bookingv1.CreateBookingRequest{
 		UserId:		userID,
 		EventId:	req.EventID,
@@ -187,8 +211,27 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	log := h.logger.With(slog.String("op", "handler.ListEvents"))
 
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
+	pageStr := r.URL.Query().Get("page")
+	if pageStr == "" {
+		pageStr = "1"
+	}
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		log.Warn("Invalid page parameter. Must be a positive integer", "value", pageStr, "error", err)
+		http.Error(w, "Invalid page parameter. Must be a positive integer", http.StatusBadRequest)
+		return
+	}
+
+	sizeStr := r.URL.Query().Get("size")
+	if sizeStr == "" {
+		sizeStr = "10"
+	}
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil || size < 1 {
+		log.Warn("Invalid size parameter. Must be a positive integer", "value", sizeStr, "error", err)
+		http.Error(w, "Invalid size parameter. Must be a positive integer", http.StatusBadRequest)
+		return
+	}
 
 	grpcResp, err := h.eventClient.ListEvents(r.Context(), &eventv1.ListEventsRequest{
 		PageNumber:	int32(page),

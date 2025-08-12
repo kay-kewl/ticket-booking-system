@@ -9,6 +9,8 @@ import (
 	"syscall"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
@@ -49,11 +51,17 @@ func main() {
 
 	logger.Info("Event Service ready. gRPC server listening", "address", l.Addr().String())
 
+	healthSrv := health.NewServer()
+
 	grpcSrv := grpc.NewServer()
 
 	grpcserver.Register(grpcSrv, eventService)
 
+	grpc_health_v1.RegisterHealthServer(grpcSrv, healthSrv)
+
 	reflection.Register(grpcSrv)
+
+	healthSrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 
 	go func() {
 		if err := grpcSrv.Serve(l); err != nil {
@@ -65,6 +73,8 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	logger.Info("Shutting down gRPC server...")
+
+	healthSrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 
 	grpcSrv.GracefulStop()
 	logger.Info("gRPC server stopped")

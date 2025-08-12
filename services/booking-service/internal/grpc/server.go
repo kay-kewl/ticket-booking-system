@@ -3,7 +3,6 @@
 	import (
 		"context"
 		"errors"
-		"log/slog"
 
 		"google.golang.org/grpc"
 		"google.golang.org/grpc/codes"
@@ -29,7 +28,7 @@
 	func (s *serverAPI) CreateBooking(ctx context.Context, req *bookingv1.CreateBookingRequest) (*bookingv1.CreateBookingResponse, error) {
 		bookingID, err := s.booking.CreateBooking(ctx, req.GetUserId(), req.GetEventId(), req.GetSeatIds())
 		if err != nil {
-			slog.Error("Failed to create booking (internal)", "error", err)
+			// slog.Logger.Error("Failed to create booking (internal)", "error", err)
 			if errors.Is(err, service.ErrSeatNotAvailable) {
 				return nil, status.Error(codes.FailedPrecondition, "seat has already been reserved")
 			}

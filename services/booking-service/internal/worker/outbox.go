@@ -76,7 +76,7 @@ func (w *OutboxWorker) processOutboxMessages(ctx context.Context) {
 	}
 	defer rows.Close()
 
-	var messageIDs []int64
+	var successfulMessageIDs []int64
 	for rows.Next() {
 		var (
 			id 			int64
@@ -104,21 +104,27 @@ func (w *OutboxWorker) processOutboxMessages(ctx context.Context) {
 		)
 		if err != nil {
 			log.Error("Failed to publish message to RabbitMQ", "id", id, "error", err)
-			continue
+			return
 		}
 
 		log.Info("Successfully published message", "id", id)
-		messageIDs = append(messageIDs, id)
+		successfulMessageIDs = append(successfulMessageIDs, id)
 	}
 
-	if len(messageIDs) == 0 {
+	if err := rows.Err(); err != nil {
+		log.Error("Error during rows iteration", "error", err)
+		return
+	}
+
+	if len(successfulMessageIDs) == 0 {
+		tx.Rollback(ctx)
 		return
 	}
 
 	_, err = tx.Exec(
 		ctx,
 		"UPDATE booking.outbox_messages SET processed_at = NOW() WHERE id = ANY($1)",
-		messageIDs,
+		successfulMessageIDs,
 	)
 	if err != nil {
 		log.Error("Failed to update outbox messages", "error", err)

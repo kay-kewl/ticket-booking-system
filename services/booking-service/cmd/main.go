@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -10,6 +12,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -34,28 +38,6 @@ func main() {
 		logger.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
 	}
-
-	// conn, err := amqp.Dial(cfg.RabbitMQURL)
-	// if err != nil {
-	// 	logger.Error("Failed to connect to RabbitMQ", "error", err)
-	// 	os.Exit(1)
-	// }
-	// defer conn.Close()
-	// logger.Info("Successfully connected to RabbitMQ")
-
-	// ch, err := conn.Channel()
-	// if err != nil {
-	// 	logger.Error("Failed to open a channel", "error", err)
-	// 	os.Exit(1)
-	// }
-	// defer ch.Close()
-
-	// err = setupRabbitMQTopology(ch)
-	// if err != nil {
-	// 	logger.Error("Failed to setup RabbitMQ topology", "error", err)
-	// 	os.Exit(1)
-	// }
-	// logger.Info("RabbitMQ topology setup successfully")
 
 	rabbitmqManager := rabbitmq.NewConnectionManager(cfg.RabbitMQURL, logger)
 	defer rabbitmqManager.Close()
@@ -93,18 +75,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	outboxWorker := worker.NewOutboxWorker(dbPool, rabbitmqManager, logger, 10 * time.Second)
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()
+
+	outboxWorker := worker.NewOutboxWorker(dbPool, rabbitmqManager, logger, 10 * time.Second)
 	go outboxWorker.Start(workerCtx)
+
+	go runExpirationWorker(workerCtx, rabbitmqManager, bookingService, logger)
 
 	logger.Info("Booking Service ready. gRPC server listening", "address", l.Addr().String())
 
+	healthSrv := health.NewServer()
 	grpcSrv := grpc.NewServer()
-
 	grpcserver.Register(grpcSrv, bookingService)
-
+	grpc_health_v1.RegisterHealthServer(grpcSrv, healthSrv)
 	reflection.Register(grpcSrv)
+	healthSrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 
 	go func() {
 		if err := grpcSrv.Serve(l); err != nil {
@@ -112,66 +98,12 @@ func main() {
 		}
 	}()
 
-	go func() {
-		logger.Info("Starting expiration worker")
-		for {
-			ch, err := rabbitmqManager.GetChannel()
-			if err != nil {
-				logger.Error("Expiration worker: failed to get channel, retrying in 60s...", "error", err)
-				time.Sleep(60 * time.Second)
-				continue
-			}
-
-			msgs, err := ch.Consume(
-				"bookings_expired_queue",
-				"",
-				false,
-				false,
-				false,
-				false,
-				nil,
-			)
-			if err != nil {
-				logger.Error("Expiration worker: failed to start consumer, retrying in 60s...", "error", err)
-				ch.Close()
-				time.Sleep(60 * time.Second)
-				continue
-			}
-
-			logger.Info("Expiration worker started. Waiting for messages...")
-
-			for d := range msgs {
-				logger.Info("Received an expired booking message", "body", string(d.Body))
-
-				// TODO: parse json, get booking_id, cancel reservation
-				// var msgBody map[string]int64
-				// if err := json.Unmarshal(d.Body, &msgBody); err != nil {
-				// 	logger.Error("Failed to unmarshal expiration message", "error", err)
-				// 	_ = d.Nack(false, false)
-				// 	continue
-				// }
-
-				// bookingID, ok := msgBody["booking_id"]
-				// if !ok {
-				// 	logger.Error("Invalid message format: no booking_id", "body", string(b.Body))
-				// 	_ = d.Nack(false, false)
-				// 	continue
-				// }
-
-				if err := d.Ack(false); err != nil {
-					logger.Error("Failed to acknowledge message", "error", err)
-				}
-			}
-
-			logger.Warn("Expiration worker: message channel closed. Reconnecting..")
-			ch.Close()
-		}
-	}()
-
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	logger.Info("Shutting down gRPC server...")
+
+	healthSrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 
 	grpcSrv.GracefulStop()
 	logger.Info("gRPC server stopped")
@@ -212,4 +144,86 @@ func setupRabbitMQTopology(ch *amqp.Channel) error {
 	}
 
 	return nil
+}
+
+func runExpirationWorker(ctx context.Context, provider worker.ChannelProvider, bs *service.Booking, logger *slog.Logger) {
+	logger.Info("Starting expiration worker")
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Expiration worker stopping...")
+			return
+		default:
+		}
+		ch, err := provider.GetChannel()
+		if err != nil {
+			logger.Error("Expiration worker: failed to get channel, retrying...", "error", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		msgs, err := ch.Consume(
+			"bookings_expired_queue",
+			"",
+			false,
+			false,
+			false,
+			false,
+			nil,
+		)
+		if err != nil {
+			logger.Error("Expiration worker: failed to start consumer, retrying...", "error", err)
+			ch.Close()
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		logger.Info("Expiration worker started. Waiting for messages...")
+
+		processLoop:
+			for {
+				select {
+				case <-ctx.Done():
+					logger.Info("Expiration worker stopping...")
+					ch.Close()
+					return
+				case d, ok := <-msgs:
+					if !ok {
+						logger.Warn("Expiration worker: message channel closed. Reconnecting...")
+						ch.Close()
+						break processLoop
+					}
+
+					logger.Info("Received an expired booking message", "body", string(d.Body))
+
+					var msgBody map[string]int64
+					if err := json.Unmarshal(d.Body, &msgBody); err != nil {
+						logger.Error("Failed to unmarshal expiration message, discarding", "error", err)
+						_ = d.Nack(false, false)
+						continue
+					}
+
+					bookingID, ok := msgBody["booking_id"]
+					if !ok {
+						logger.Error("Invalid message format, discarding", "body", string(d.Body))
+						_ = d.Nack(false, false)
+						continue
+					}
+
+					opCtx, opCancel := context.WithTimeout(context.Background(), 1 * time.Minute)
+					if err := bs.CancelExpiredBooking(opCtx, bookingID); err != nil {
+						logger.Error("Failed to process expired booking, retrying", "booking_id", bookingID, "error", err)
+						_ = d.Nack(false, true)
+						opCancel()
+						continue
+					}
+					opCancel()
+
+					logger.Info("Successfully cancelled expired booking", "booking_id", bookingID)
+					if err := d.Ack(false); err != nil {
+						logger.Error("Failed to acknowledge message", "error", err)
+					}
+				}
+			}
+	}
 }

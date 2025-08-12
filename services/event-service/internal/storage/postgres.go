@@ -21,7 +21,7 @@ func (s *Storage) ListEvents(ctx context.Context, pageNumber, pageSize int32) ([
 	const op = "storage.ListEvents"
 
 	var totalCount int64
-	if err := s.db.Query(ctx, "SELECT COUNT(*) FROM event.events").Scan(&totalCount); err != nil {
+	if err := s.db.QueryRow(ctx, "SELECT COUNT(*) FROM event.events").Scan(&totalCount); err != nil {
 		return nil, 0, fmt.Errorf("%s: %w", op, err)
 	}
 

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
@@ -28,6 +30,10 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		logger.Error("Failed to load configuration", "error", err)
+		os.Exit(1)
+	}
+	if cfg.JWTSecret == "" {
+		logger.Error("JWT_SECRET environmental variable is not set")
 		os.Exit(1)
 	}
 
@@ -50,11 +56,17 @@ func main() {
 
 	logger.Info("Auth Service ready. gRPC server listening", "address", l.Addr().String())
 
+	healthSrv := health.NewServer()
+
 	grpcSrv := grpc.NewServer()
 
 	grpcserver.Register(grpcSrv, authService)
 
+	grpc_health_v1.RegisterHealthServer(grpcSrv, healthSrv)
+
 	reflection.Register(grpcSrv)
+
+	healthSrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 
 	go func() {
 		if err := grpcSrv.Serve(l); err != nil {
@@ -66,6 +78,8 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	logger.Info("Shutting down gRPC server...")
+
+	healthSrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 
 	grpcSrv.GracefulStop()
 	logger.Info("gRPC server stopped")

@@ -28,10 +28,10 @@ func Load() (*Config, error) {
 	schema := getEnv("DATABASE_SCHEMA", "public")
 	postgresURL := getEnv("DATABASE_URL", "")
 	if postgresURL == "" {
-		postgresURL = fmt.Sprintf("postgres://%s:%s@postgres:%s/%s?sslmode=disable&search_path=%s",
+		postgresURL = fmt.Sprintf("postgres://%s:%s@postgres:5432/%s?sslmode=disable&search_path=%s",
 								  getEnv("POSTGRES_USER", "user"),
 							   	  getEnv("POSTGRES_PASSWORD", "password"),
-								  getEnv("POSTGRES_PORT", "5432"),
+								  // getEnv("POSTGRES_PORT", "5432"),
 								  getEnv("POSTGRES_DB", "booking_db"),
 								  schema,
 		)
@@ -46,7 +46,7 @@ func Load() (*Config, error) {
 		EventGRPCPort:		getEnv("EVENT_GRPC_PORT", "50052"),
 		PostgresURL:		postgresURL,
 		RabbitMQURL:		getEnv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"),
-		JWTSecret:			getEnv("JWT_SECRET", "my-secret"),
+		JWTSecret:			getEnv("JWT_SECRET", ""),
 	}
 
 	return cfg, nil

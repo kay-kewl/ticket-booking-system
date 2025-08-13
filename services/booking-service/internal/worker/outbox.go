@@ -14,18 +14,18 @@ type ChannelProvider interface {
 }
 
 type OutboxWorker struct {
-	db			*pgxpool.Pool
-	provider 	ChannelProvider
-	logger		*slog.Logger
-	ticker		*time.Ticker
+	db       *pgxpool.Pool
+	provider ChannelProvider
+	logger   *slog.Logger
+	ticker   *time.Ticker
 }
 
 func NewOutboxWorker(db *pgxpool.Pool, provider ChannelProvider, logger *slog.Logger, interval time.Duration) *OutboxWorker {
 	return &OutboxWorker{
-		db:			db,
-		provider:	provider,
-		logger:		logger,
-		ticker: 	time.NewTicker(interval),
+		db:       db,
+		provider: provider,
+		logger:   logger,
+		ticker:   time.NewTicker(interval),
 	}
 }
 
@@ -79,10 +79,10 @@ func (w *OutboxWorker) processOutboxMessages(ctx context.Context) {
 	var successfulMessageIDs []int64
 	for rows.Next() {
 		var (
-			id 			int64
-			exchange	string
-			routingKey	string
-			payload		[]byte
+			id         int64
+			exchange   string
+			routingKey string
+			payload    []byte
 		)
 
 		if err := rows.Scan(&id, &exchange, &routingKey, &payload); err != nil {
@@ -97,9 +97,9 @@ func (w *OutboxWorker) processOutboxMessages(ctx context.Context) {
 			false,
 			false,
 			amqp.Publishing{
-				ContentType: 	"application/json",
-				Body:			payload,
-				DeliveryMode:	amqp.Persistent,
+				ContentType:  "application/json",
+				Body:         payload,
+				DeliveryMode: amqp.Persistent,
 			},
 		)
 		if err != nil {

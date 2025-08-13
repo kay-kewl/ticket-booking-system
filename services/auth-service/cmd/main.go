@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
-	"net"
 	"syscall"
 	"time"
 
@@ -17,9 +17,9 @@ import (
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
 	"github.com/kay-kewl/ticket-booking-system/internal/database"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
+	grpcserver "github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/grpc"
 	"github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/service"
 	"github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/storage"
-	grpcserver "github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/grpc"
 )
 
 func main() {
@@ -46,7 +46,7 @@ func main() {
 	defer dbPool.Close()
 
 	authStorage := storage.New(dbPool)
-	authService := service.New(cfg.JWTSecret, 1 * time.Hour, authStorage, authStorage)
+	authService := service.New(cfg.JWTSecret, 1*time.Hour, authStorage, authStorage)
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.AuthGRPCPort))
 	if err != nil {

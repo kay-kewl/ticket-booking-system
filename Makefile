@@ -16,4 +16,4 @@ proto:
 
 seed:
 	@echo "Seeding database with test data..."
-	@docker-compose exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -f ./scripts/seed.sql'
+	@docker compose exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -f ./scripts/seed.sql'

@@ -10,21 +10,21 @@ import (
 )
 
 type ConnectionManager struct {
-	connection 	*amqp.Connection
-	done		chan bool
-	logger		*slog.Logger
-	mutex		sync.RWMutex
-	once  		sync.Once
-	ready		chan bool
-	url			string
+	connection *amqp.Connection
+	done       chan bool
+	logger     *slog.Logger
+	mutex      sync.RWMutex
+	once       sync.Once
+	ready      chan bool
+	url        string
 }
 
 func NewConnectionManager(url string, logger *slog.Logger) *ConnectionManager {
 	m := &ConnectionManager{
-		done:		make(chan bool),
-		logger: 	logger.With(slog.String("component", "RabbitMQManager")),
-		ready:		make(chan bool, 1),
-		url:		url,
+		done:   make(chan bool),
+		logger: logger.With(slog.String("component", "RabbitMQManager")),
+		ready:  make(chan bool, 1),
+		url:    url,
 	}
 
 	go m.handleReconnect()
@@ -121,7 +121,7 @@ func (m *ConnectionManager) Close() {
 					m.logger.Error("Failed to close connection", "error", err)
 				}
 			}
-		}
+		},
 	)
 }
 

@@ -22,10 +22,10 @@ import (
 	"github.com/kay-kewl/ticket-booking-system/internal/database"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
 	"github.com/kay-kewl/ticket-booking-system/internal/rabbitmq"
+	grpcserver "github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/grpc"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/service"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/storage"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/worker"
-	grpcserver "github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/grpc"
 )
 
 func main() {
@@ -78,7 +78,7 @@ func main() {
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()
 
-	outboxWorker := worker.NewOutboxWorker(dbPool, rabbitmqManager, logger, 10 * time.Second)
+	outboxWorker := worker.NewOutboxWorker(dbPool, rabbitmqManager, logger, 10*time.Second)
 	go outboxWorker.Start(workerCtx)
 
 	go runExpirationWorker(workerCtx, rabbitmqManager, bookingService, logger)
@@ -131,8 +131,8 @@ func setupRabbitMQTopology(ch *amqp.Channel) error {
 	}
 
 	_, err = ch.QueueDeclare("bookings_delay_15m", true, false, false, false, amqp.Table{
-		"x-message-ttl":			900000,
-		"x-dead-letter-exchange":	"bookings_dlx",
+		"x-message-ttl":          900000,
+		"x-dead-letter-exchange": "bookings_dlx",
 	})
 	if err != nil {
 		return fmt.Errorf("failed to declare delay queue: %w", err)
@@ -180,50 +180,50 @@ func runExpirationWorker(ctx context.Context, provider worker.ChannelProvider, b
 
 		logger.Info("Expiration worker started. Waiting for messages...")
 
-		processLoop:
-			for {
-				select {
-				case <-ctx.Done():
-					logger.Info("Expiration worker stopping...")
+	processLoop:
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info("Expiration worker stopping...")
+				ch.Close()
+				return
+			case d, ok := <-msgs:
+				if !ok {
+					logger.Warn("Expiration worker: message channel closed. Reconnecting...")
 					ch.Close()
-					return
-				case d, ok := <-msgs:
-					if !ok {
-						logger.Warn("Expiration worker: message channel closed. Reconnecting...")
-						ch.Close()
-						break processLoop
-					}
+					break processLoop
+				}
 
-					logger.Info("Received an expired booking message", "body", string(d.Body))
+				logger.Info("Received an expired booking message", "body", string(d.Body))
 
-					var msgBody map[string]int64
-					if err := json.Unmarshal(d.Body, &msgBody); err != nil {
-						logger.Error("Failed to unmarshal expiration message, discarding", "error", err)
-						_ = d.Nack(false, false)
-						continue
-					}
+				var msgBody map[string]int64
+				if err := json.Unmarshal(d.Body, &msgBody); err != nil {
+					logger.Error("Failed to unmarshal expiration message, discarding", "error", err)
+					_ = d.Nack(false, false)
+					continue
+				}
 
-					bookingID, ok := msgBody["booking_id"]
-					if !ok {
-						logger.Error("Invalid message format, discarding", "body", string(d.Body))
-						_ = d.Nack(false, false)
-						continue
-					}
+				bookingID, ok := msgBody["booking_id"]
+				if !ok {
+					logger.Error("Invalid message format, discarding", "body", string(d.Body))
+					_ = d.Nack(false, false)
+					continue
+				}
 
-					opCtx, opCancel := context.WithTimeout(context.Background(), 1 * time.Minute)
-					if err := bs.CancelExpiredBooking(opCtx, bookingID); err != nil {
-						logger.Error("Failed to process expired booking, retrying", "booking_id", bookingID, "error", err)
-						_ = d.Nack(false, true)
-						opCancel()
-						continue
-					}
+				opCtx, opCancel := context.WithTimeout(context.Background(), 1*time.Minute)
+				if err := bs.CancelBooking(opCtx, bookingID); err != nil {
+					logger.Error("Failed to process expired booking, retrying", "booking_id", bookingID, "error", err)
+					_ = d.Nack(false, true)
 					opCancel()
+					continue
+				}
+				opCancel()
 
-					logger.Info("Successfully cancelled expired booking", "booking_id", bookingID)
-					if err := d.Ack(false); err != nil {
-						logger.Error("Failed to acknowledge message", "error", err)
-					}
+				logger.Info("Successfully cancelled expired booking", "booking_id", bookingID)
+				if err := d.Ack(false); err != nil {
+					logger.Error("Failed to acknowledge message", "error", err)
 				}
 			}
+		}
 	}
 }

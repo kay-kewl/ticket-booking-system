@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"log/slog"
 	"syscall"
 	"time"
 
@@ -65,7 +65,7 @@ func main() {
 
 	eventServiceAddr := fmt.Sprintf("event-service:%s", cfg.EventGRPCPort)
 	eventServiceConn, err := grpc.Dial(
-		eventServiceAddr, 
+		eventServiceAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(retryPolicy),
 	)
@@ -110,11 +110,11 @@ func main() {
 	// })
 
 	srv := &http.Server{
-		Addr: 			":" + cfg.APIPort,
-		Handler: 		mux,
-		IdleTimeout:	300 * time.Second,
-		ReadTimeout:	10 * time.Second,
-		WriteTimeout:	10 * time.Second,
+		Addr:         ":" + cfg.APIPort,
+		Handler:      mux,
+		IdleTimeout:  300 * time.Second,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
 	}
 
 	go func() {
@@ -129,7 +129,7 @@ func main() {
 	<-quit
 	logger.Info("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {

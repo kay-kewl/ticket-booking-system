@@ -11,39 +11,39 @@ import (
 	bookingv1 "github.com/kay-kewl/ticket-booking-system/gen/go/booking"
 	eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
 
+	"github.com/go-playground/validator/v10"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"github.com/go-playground/validator/v10"
 )
 
 var validate = validator.New()
 
 type Handler struct {
-	authClient		authv1.AuthClient
-	bookingClient	bookingv1.BookingServiceClient
-	eventClient		eventv1.EventServiceClient
-	logger			*slog.Logger
+	authClient    authv1.AuthClient
+	bookingClient bookingv1.BookingServiceClient
+	eventClient   eventv1.EventServiceClient
+	logger        *slog.Logger
 }
 
 func New(authClient authv1.AuthClient, bookingClient bookingv1.BookingServiceClient, eventClient eventv1.EventServiceClient, logger *slog.Logger) *Handler {
 	return &Handler{
-		authClient: 	authClient,
-		bookingClient:	bookingClient,
-		eventClient:	eventClient,
-		logger:			logger,
+		authClient:    authClient,
+		bookingClient: bookingClient,
+		eventClient:   eventClient,
+		logger:        logger,
 	}
 }
 
 type RegisterRequest struct {
-	Email 		string `json:"email" validate:"required,email"`
-	Password	string `json:"password" validate:"required,min=8"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8"`
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	const op = "handler.Register"
 
 	log := h.logger.With(slog.String("op", op))
-	r.Body = http.MaxBytesReader(w, r.Body, 1024 * 1024)
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -55,15 +55,15 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// TODO: validate email and password
 	if err := validate.Struct(req); err != nil {
 		log.Warn("Invalid request body for registration", "error", err)
-		http.Error(w, "invalid request: " + err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	log.Info("Making gRPC call to auth.Register", slog.String("email", req.Email))
 
 	grpcResp, err := h.authClient.Register(r.Context(), &authv1.RegisterRequest{
-		Email:		req.Email,
-		Password:	req.Password,
+		Email:    req.Email,
+		Password: req.Password,
 	})
 
 	if err != nil {
@@ -99,14 +99,14 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 type LoginRequest struct {
-	Email		string `json:"email" validate:"required,email"`
-	Password	string `json:"password" validate:"required"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	const op = "handler.Login"
 	log := h.logger.With(slog.String("op", op))
-	r.Body = http.MaxBytesReader(w, r.Body, 1024 * 1024)
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -117,13 +117,13 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	if err := validate.Struct(req); err != nil {
 		log.Warn("Invalid request for body login", "error", err)
-		http.Error(w, "invalid request: " + err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	grpcResp, err := h.authClient.Login(r.Context(), &authv1.LoginRequest{
-		Email:		req.Email,
-		Password:	req.Password,
+		Email:    req.Email,
+		Password: req.Password,
 	})
 
 	if err != nil {
@@ -138,7 +138,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateBookingRequest struct {
-	EventID int64 `json:"event_id" validate:"required"`
+	EventID int64   `json:"event_id" validate:"required"`
 	SeatIDs []int64 `json:"seat_ids" validate:"required"`
 }
 
@@ -146,7 +146,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	const op = "handler.CreateBooking"
 
 	log := h.logger.With(slog.String("op", op))
-	r.Body = http.MaxBytesReader(w, r.Body, 1024 * 1024)
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -180,21 +180,31 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 
 	if err := validate.Struct(req); err != nil {
 		log.Warn("Invalid request for body create booking", "error", err)
-		http.Error(w, "invalid request: " + err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	bookingResp, err := h.bookingClient.CreateBooking(r.Context(), &bookingv1.CreateBookingRequest{
-		UserId:		userID,
-		EventId:	req.EventID,
-		SeatIds:	req.SeatIDs,
+		UserId:  userID,
+		EventId: req.EventID,
+		SeatIds: req.SeatIDs,
 	})
 
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
-			if st.Code() == codes.FailedPrecondition {
-				log.Warn("Attempt to book reserved seats", "seats", req.SeatIDs)
+			switch st.Code() {
+			case codes.FailedPrecondition:
+				if strings.Contains(st.Message(), "payment failed") {
+					log.Warn("Booking failed due to payment error", "userID", userID, "error", st.Message())
+					http.Error(w, "Payment failed", http.StatusConflict)
+					return
+				}
+				log.Warn("Attempt to book reserved seats", "userID", userID, "seats", req.SeatIDs, "error", st.Message())
 				http.Error(w, "booked seats have already been reserved", http.StatusConflict)
+				return
+			default:
+				log.Error("Unhandled gRPC error from booking-service", "userID", userID, "code", st.Code(), "error", st.Message())
+				http.Error(w, "Failed to create booking due to an internal error", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -234,8 +244,8 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	grpcResp, err := h.eventClient.ListEvents(r.Context(), &eventv1.ListEventsRequest{
-		PageNumber:	int32(page),
-		PageSize:	int32(size),
+		PageNumber: int32(page),
+		PageSize:   int32(size),
 	})
 	if err != nil {
 		log.Error("gRPC call to event-service failed", "error", err)

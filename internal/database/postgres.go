@@ -1,8 +1,8 @@
 package database
 
 import (
-	"log/slog"
 	"context"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -14,7 +14,7 @@ func NewConnection(ctx context.Context, destination string, logger *slog.Logger)
 	}
 
 	// check that connection is established, close the pool if not
-	if err := pool.Ping(ctx); error != nil { 
+	if err = pool.Ping(ctx); err != nil {
 		pool.Close()
 		return nil, err
 	}

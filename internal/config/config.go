@@ -1,19 +1,19 @@
 package config
 
 import (
-	"os"
 	"fmt"
+	"os"
 )
 
 type Config struct {
-	APIPort			string
-	AuthGRPCPort	string
-	BookingGRPCPort	string
-	DatabaseSchema	string
-	EventGRPCPort	string
-	PostgresURL		string
-	RabbitMQURL		string
-	JWTSecret		string
+	APIPort         string
+	AuthGRPCPort    string
+	BookingGRPCPort string
+	DatabaseSchema  string
+	EventGRPCPort   string
+	PostgresURL     string
+	RabbitMQURL     string
+	JWTSecret       string
 }
 
 func getEnv(key, defaultValue string) string {
@@ -29,24 +29,23 @@ func Load() (*Config, error) {
 	postgresURL := getEnv("DATABASE_URL", "")
 	if postgresURL == "" {
 		postgresURL = fmt.Sprintf("postgres://%s:%s@postgres:5432/%s?sslmode=disable&search_path=%s",
-								  getEnv("POSTGRES_USER", "user"),
-							   	  getEnv("POSTGRES_PASSWORD", "password"),
-								  // getEnv("POSTGRES_PORT", "5432"),
-								  getEnv("POSTGRES_DB", "booking_db"),
-								  schema,
+			getEnv("POSTGRES_USER", "user"),
+			getEnv("POSTGRES_PASSWORD", "password"),
+			// getEnv("POSTGRES_PORT", "5432"),
+			getEnv("POSTGRES_DB", "booking_db"),
+			schema,
 		)
 	}
-	
 
 	cfg := &Config{
-		APIPort:			getEnv("API_PORT", "8080"),
-		AuthGRPCPort:		getEnv("AUTH_GRPC_PORT", "50051"),
-		BookingGRPCPort:	getEnv("BOOKING_GRPC_PORT", "50053"),
-		DatabaseSchema:		schema,
-		EventGRPCPort:		getEnv("EVENT_GRPC_PORT", "50052"),
-		PostgresURL:		postgresURL,
-		RabbitMQURL:		getEnv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"),
-		JWTSecret:			getEnv("JWT_SECRET", ""),
+		APIPort:         getEnv("API_PORT", "8080"),
+		AuthGRPCPort:    getEnv("AUTH_GRPC_PORT", "50051"),
+		BookingGRPCPort: getEnv("BOOKING_GRPC_PORT", "50053"),
+		DatabaseSchema:  schema,
+		EventGRPCPort:   getEnv("EVENT_GRPC_PORT", "50052"),
+		PostgresURL:     postgresURL,
+		RabbitMQURL:     getEnv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"),
+		JWTSecret:       getEnv("JWT_SECRET", ""),
 	}
 
 	return cfg, nil

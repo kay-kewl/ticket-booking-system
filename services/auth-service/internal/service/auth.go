@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/kay-kewl/ticket-booking-system/services/auth-service/internal/storage"
 )
@@ -24,18 +24,18 @@ type UserProvider interface {
 }
 
 type Auth struct {
-	jwtSecret		[]byte
-	tokenTTL		time.Duration
-	userProvider 	UserProvider
-	userSaver		UserSaver
+	jwtSecret    []byte
+	tokenTTL     time.Duration
+	userProvider UserProvider
+	userSaver    UserSaver
 }
 
 func New(jwtSecret string, tokenTTL time.Duration, userProvider UserProvider, userSaver UserSaver) *Auth {
 	return &Auth{
-		jwtSecret:		[]byte(jwtSecret),
-		tokenTTL:		tokenTTL,
-		userProvider: 	userProvider,
-		userSaver:		userSaver,
+		jwtSecret:    []byte(jwtSecret),
+		tokenTTL:     tokenTTL,
+		userProvider: userProvider,
+		userSaver:    userSaver,
 	}
 }
 

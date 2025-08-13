@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrUserExists = errors.New("user with this email already exists")
@@ -51,7 +51,7 @@ func (s *Storage) User(ctx context.Context, email string) (int64, []byte, error)
 	if err != nil {
 		// TODO: pgx.ErrNoRows
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, fmt.Errorf("%s: %w", op, ErrUserNotFound)
+			return 0, nil, fmt.Errorf("%s: %w", op, ErrUserNotFound)
 		}
 		return 0, nil, fmt.Errorf("%s: %w", op, err)
 	}

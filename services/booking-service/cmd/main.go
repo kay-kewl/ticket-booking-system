@@ -67,7 +67,10 @@ func main() {
 	defer dbPool.Close()
 
 	bookingStorage := storage.New(dbPool)
-	bookingService := service.New(bookingStorage)
+	realPaymentSimulator := func() bool {
+		return rand.Intn(10) < 9
+	}
+	bookingService := service.New(bookingStorage, realPaymentSimulator)
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.BookingGRPCPort))
 	if err != nil {

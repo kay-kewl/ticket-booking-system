@@ -19,13 +19,17 @@ type BookingCreator interface {
 	ExpireBooking(ctx context.Context, bookingID int64) error
 }
 
+type PaymentSimulator func() bool
+
 type Booking struct {
-	bookingCreator BookingCreator
+	bookingCreator 		BookingCreator
+	paymentSimulator	PaymentSimulator
 }
 
-func New(bookingCreator BookingCreator) *Booking {
+func New(bookingCreator BookingCreator, paymentSimulator PaymentSimulator) *Booking {
 	return &Booking{
-		bookingCreator: bookingCreator,
+		bookingCreator: 	bookingCreator,
+		paymentSimulator:	paymentSimulator,
 	}
 }
 
@@ -41,7 +45,7 @@ func (b *Booking) CreateBooking(ctx context.Context, userID, eventID int64, seat
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
 
-	paymentSuccessful := false
+	paymentSuccessful := b.paymentSimulator()
 
 	if paymentSuccessful {
 		err = b.bookingCreator.ConfirmBooking(ctx, bookingID)

@@ -21,7 +21,9 @@ import (
 	"github.com/kay-kewl/ticket-booking-system/internal/grpc/interceptors"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
 	"github.com/kay-kewl/ticket-booking-system/services/api-gateway/internal/handler"
-	"github.com/kay-kewl/ticket-booking-system/services/api-gateway/internal/middleware"
+	apimiddleware "github.com/kay-kewl/ticket-booking-system/services/api-gateway/internal/middleware"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -96,6 +98,15 @@ func main() {
 	bookingClient := bookingv1.NewBookingServiceClient(bookingServiceConn)
 	logger.Info("gRPC connection to booking-service established")
 
+	go func() {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", promhttp.Handler())
+		logger.Info("Starting metrics server on port 9100")
+		if err := http.ListenAndServe(":9100", metricsMux); err != nil {
+			logger.Error("Metrics server failed", "error", err)
+		}
+	}()
+
 	h := handler.New(authClient, bookingClient, eventClient, logger)
 
 	mux := http.NewServeMux()
@@ -115,7 +126,8 @@ func main() {
 	// })
 
 	var handlerWithMiddleware http.Handler = mux
-	handlerWithMiddleware = middleware.RequestID(handlerWithMiddleware)
+	handlerWithMiddleware = apimiddleware.Metrics(handlerWithMiddleware)
+	handlerWithMiddleware = apimiddleware.RequestID(handlerWithMiddleware)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.APIPort,

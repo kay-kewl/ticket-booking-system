@@ -15,6 +15,7 @@ import (
 
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
 	"github.com/kay-kewl/ticket-booking-system/internal/database"
+	"github.com/kay-kewl/ticket-booking-system/internal/grpc/interceptors"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
 	grpcserver "github.com/kay-kewl/ticket-booking-system/services/event-service/internal/grpc"
 	"github.com/kay-kewl/ticket-booking-system/services/event-service/internal/service"
@@ -53,9 +54,11 @@ func main() {
 
 	healthSrv := health.NewServer()
 
-	grpcSrv := grpc.NewServer()
+	grpcSrv := grpc.NewServer(
+		grpc.UnaryInterceptor(interceptors.ServerRequestIDInterceptor()),
+	)
 
-	grpcserver.Register(grpcSrv, eventService)
+	grpcserver.Register(grpcSrv, eventService, logger)
 
 	grpc_health_v1.RegisterHealthServer(grpcSrv, healthSrv)
 

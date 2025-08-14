@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
 	"github.com/kay-kewl/ticket-booking-system/internal/database"
+	"github.com/kay-kewl/ticket-booking-system/internal/grpc/interceptors"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
 	"github.com/kay-kewl/ticket-booking-system/internal/rabbitmq"
 	grpcserver "github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/grpc"
@@ -89,7 +91,9 @@ func main() {
 	logger.Info("Booking Service ready. gRPC server listening", "address", l.Addr().String())
 
 	healthSrv := health.NewServer()
-	grpcSrv := grpc.NewServer()
+	grpcSrv := grpc.NewServer(
+		grpc.UnaryInterceptor(interceptors.ServerRequestIDInterceptor()),
+	)
 	grpcserver.Register(grpcSrv, bookingService)
 	grpc_health_v1.RegisterHealthServer(grpcSrv, healthSrv)
 	reflection.Register(grpcSrv)

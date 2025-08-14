@@ -221,6 +221,8 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	log := h.logger.With(slog.String("op", "handler.ListEvents"))
 
+	log.InfoContext(r.Context(), "request received")
+
 	pageStr := r.URL.Query().Get("page")
 	if pageStr == "" {
 		pageStr = "1"

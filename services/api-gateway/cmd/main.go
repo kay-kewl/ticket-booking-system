@@ -18,8 +18,10 @@ import (
 	bookingv1 "github.com/kay-kewl/ticket-booking-system/gen/go/booking"
 	eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
+	"github.com/kay-kewl/ticket-booking-system/internal/grpc/interceptors"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
 	"github.com/kay-kewl/ticket-booking-system/services/api-gateway/internal/handler"
+	"github.com/kay-kewl/ticket-booking-system/services/api-gateway/internal/middleware"
 )
 
 func main() {
@@ -54,6 +56,7 @@ func main() {
 		authServiceAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(retryPolicy),
+		grpc.WithUnaryInterceptor(interceptors.ClientRequestIDInterceptor()),
 	)
 	if err != nil {
 		logger.Error("Failed to dial auth-service", "error", err)
@@ -68,6 +71,7 @@ func main() {
 		eventServiceAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(retryPolicy),
+		grpc.WithUnaryInterceptor(interceptors.ClientRequestIDInterceptor()),
 	)
 	if err != nil {
 		logger.Error("Failed to dial event-service", "error", err)
@@ -82,6 +86,7 @@ func main() {
 		bookingServiceAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(retryPolicy),
+		grpc.WithUnaryInterceptor(interceptors.ClientRequestIDInterceptor()),
 	)
 	if err != nil {
 		logger.Error("Failed to dial booking-service", slog.String("addr", bookingServiceAddr), "error", err)
@@ -109,9 +114,12 @@ func main() {
 	// 	w.Write([]byte("OK"))
 	// })
 
+	var handlerWithMiddleware http.Handler = mux
+	handlerWithMiddleware = middleware.RequestID(handlerWithMiddleware)
+
 	srv := &http.Server{
 		Addr:         ":" + cfg.APIPort,
-		Handler:      mux,
+		Handler:      handlerWithMiddleware,
 		IdleTimeout:  300 * time.Second,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,

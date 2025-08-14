@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"log/slog"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -17,13 +18,15 @@ type Events interface {
 type serverAPI struct {
 	eventv1.UnimplementedEventServiceServer
 	events Events
+	log	   *slog.Logger
 }
 
-func Register(gRPCServer *grpc.Server, events Events) {
-	eventv1.RegisterEventServiceServer(gRPCServer, &serverAPI{events: events})
+func Register(gRPCServer *grpc.Server, events Events, log *slog.Logger) {
+	eventv1.RegisterEventServiceServer(gRPCServer, &serverAPI{events: events, log: log})
 }
 
 func (s *serverAPI) ListEvents(ctx context.Context, req *eventv1.ListEventsRequest) (*eventv1.ListEventsResponse, error) {
+	s.log.InfoContext(ctx, "ListEvents request received in event-service")
 	pageNumber := req.GetPageNumber()
 	if pageNumber < 1 {
 		pageNumber = 1

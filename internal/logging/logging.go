@@ -11,7 +11,9 @@ func New() *slog.Logger {
 		Level:     slog.LevelDebug,
 	})
 
-	logger := slog.New(handler)
+	handlerWithRequestID := &RequestIDHandler{Handler: handler}
+
+	logger := slog.New(handlerWithRequestID)
 
 	return logger
 }

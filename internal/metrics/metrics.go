@@ -12,3 +12,11 @@ var HTTPRequestsTotal = promauto.NewCounterVec(
 	},
 	[]string{"method", "path"},
 )
+
+var BookingsTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "bookings_total",
+		Help: "Total number of created bookings by status",
+	},
+	[]string{"status"},
+)

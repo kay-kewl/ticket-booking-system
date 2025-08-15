@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/kay-kewl/ticket-booking-system/internal/metrics"
 )
 
 var ErrSeatNotAvailable = errors.New("seat is not available or does not exist")
@@ -134,6 +136,8 @@ func (s *Storage) ConfirmBooking(ctx context.Context, bookingID int64) error {
 		return ErrBookingCannotBeChanged
 	}
 
+	metrics.BookingsTotal.WithLabelValues("confirmed").Inc()
+
 	_, err = tx.Exec(
 		ctx,
 		"UPDATE event.seats SET status = 'BOOKED' WHERE id IN (SELECT seat_id FROM booking.booking_seats WHERE booking_id = $1)",
@@ -215,6 +219,8 @@ func (s *Storage) updateBookingStatus(ctx context.Context, tx pgx.Tx, bookingID 
 	if tag.RowsAffected() == 0 {
 		return nil
 	}
+
+	metrics.BookingsTotal.WithLabelValues(newStatus).Inc()
 
 	_, err = tx.Exec(
 		ctx,

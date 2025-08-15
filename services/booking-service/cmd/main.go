@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -28,12 +29,26 @@ import (
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/service"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/storage"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/worker"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
 	logger := logging.New()
 
 	logger.Info("Booking Service is starting up...")
+
+	go func() {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", promhttp.Handler())
+
+		port := "9103"
+		logger.Info("Starting metrics server", "port", port)
+
+		if err := http.ListenAndServe(":"+port, metricsMux); err != nil {
+			logger.Error("Metrics server failed to start", "error", err)
+		}
+	}()
 
 	cfg, err := config.Load()
 	if err != nil {

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 )
@@ -37,6 +38,11 @@ func Load() (*Config, error) {
 		)
 	}
 
+	jwtSecret, ok := os.LookupEnv("JWT_SECRET")
+	if !ok || jwtSecret == "" {
+		return nil, errors.New("JWT_SECRET environmental variable is not set or empty")
+	}
+
 	cfg := &Config{
 		APIPort:         getEnv("API_PORT", "8080"),
 		AuthGRPCPort:    getEnv("AUTH_GRPC_PORT", "50051"),
@@ -45,7 +51,7 @@ func Load() (*Config, error) {
 		EventGRPCPort:   getEnv("EVENT_GRPC_PORT", "50052"),
 		PostgresURL:     postgresURL,
 		RabbitMQURL:     getEnv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"),
-		JWTSecret:       getEnv("JWT_SECRET", ""),
+		JWTSecret:       jwtSecret,
 	}
 
 	return cfg, nil

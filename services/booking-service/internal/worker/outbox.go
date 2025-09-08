@@ -54,6 +54,13 @@ func (w *OutboxWorker) processOutboxMessages(ctx context.Context) {
 	}
 	defer ch.Close()
 
+	if err := ch.Confirm(false); err != nil {
+		log.Error("Failed to set channel to confirm mode", "error", err)
+		return
+	}
+
+	confirmChan := ch.NotifyPublish(make(chan amqp.Confirmation, 1))
+
 	tx, err := w.db.Begin(ctx)
 	if err != nil {
 		log.Error("Failed to begin transaction", "error", err)
@@ -103,12 +110,24 @@ func (w *OutboxWorker) processOutboxMessages(ctx context.Context) {
 			},
 		)
 		if err != nil {
-			log.Error("Failed to publish message to RabbitMQ", "id", id, "error", err)
-			return
+			log.Error("Failed to publish message to RabbitMQ, will retry", "id", id, "error", err)
+			continue
 		}
 
-		log.Info("Successfully published message", "id", id)
-		successfulMessageIDs = append(successfulMessageIDs, id)
+		select {
+		case ack := <-confirmChan:
+			if ack.Ack {
+				log.Info("Successfully published and confirmed message", "id", id)
+				successfulMessageIDs = append(successfulMessageIDs, id)
+			} else {
+				log.Error("RabbitMQ nacked the message, will retry", "id", id)
+			}
+		case <-time.After(15 * time.Second):
+			log.Error("Confirmation timeout for message, will retry", "id", id)
+		case <-ctx.Done():
+			log.Info("Context cancelled, stopping message processing")
+			return
+		}
 	}
 
 	if err := rows.Err(); err != nil {
@@ -116,22 +135,22 @@ func (w *OutboxWorker) processOutboxMessages(ctx context.Context) {
 		return
 	}
 
-	if len(successfulMessageIDs) == 0 {
+	if len(successfulMessageIDs) > 0 {
+		_, err := tx.Exec(
+			ctx,
+			"UPDATE booking.outbox_messages SET processed_at = NOW() WHERE id = ANY($1)",
+			successfulMessageIDs,
+		)
+		if err != nil {
+			log.Error("Failed to update outbox messages", "error", err)
+			return
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			log.Error("Failed to commit transaction", "error", err)
+		}
+	} else {
 		tx.Rollback(ctx)
 		return
-	}
-
-	_, err = tx.Exec(
-		ctx,
-		"UPDATE booking.outbox_messages SET processed_at = NOW() WHERE id = ANY($1)",
-		successfulMessageIDs,
-	)
-	if err != nil {
-		log.Error("Failed to update outbox messages", "error", err)
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		log.Error("Failed to commit transaction", "error", err)
 	}
 }

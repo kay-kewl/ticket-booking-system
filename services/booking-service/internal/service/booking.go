@@ -50,7 +50,16 @@ func (b *Booking) CreateBooking(ctx context.Context, userID, eventID int64, seat
 	if paymentSuccessful {
 		err = b.bookingCreator.ConfirmBooking(ctx, bookingID)
 		if err != nil {
+			// TODO:
+			// деньги списаны, но статус в бд не обновлен
+			// здесь должна быть логика для гарантированного повтора:
+			// 1. записать bookingID в отдельную таблицу failed_confirmations
+			// 2. фоновый воркер должен периодически пытаться подтвердить эти бронирования
+			// 3. должна быть настроена система алертинга, чтобы разработчики немедленно узнали о проблеме
 			slog.Error("CRITICAL: payment was successful but failed to confirm booking", "bookingID", bookingID, "error", err)
+			// не возвращаем внутреннюю ошибку клиенту
+			// вместо этого можно вернуть ID бронирования и сообщение о том, что оно обрабатывается,
+			// либо ошибку, которая укажет на необходимость связаться с поддержкой
 			return 0, fmt.Errorf("%s: critical error - failed to confirm booking after payment: %w", op, err)
 		}
 		return bookingID, nil

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
@@ -18,6 +18,8 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
@@ -25,6 +27,7 @@ import (
 	"github.com/kay-kewl/ticket-booking-system/internal/grpc/interceptors"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
 	"github.com/kay-kewl/ticket-booking-system/internal/rabbitmq"
+	"github.com/kay-kewl/ticket-booking-system/internal/telemetry"
 	grpcserver "github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/grpc"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/service"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/storage"
@@ -37,6 +40,13 @@ func main() {
 	logger := logging.New()
 
 	logger.Info("Booking Service is starting up...")
+
+	shutdown, err := telemetry.InitTracerProvider(context.Background(), "booking-service", "jaeger:4317")
+	if err != nil {
+		logger.Error("Failed to initialize tracer provider", "error", err)
+		os.Exit(1)
+	}
+	defer shutdown()
 
 	go func() {
 		metricsMux := http.NewServeMux()
@@ -85,7 +95,7 @@ func main() {
 
 	bookingStorage := storage.New(dbPool)
 	realPaymentSimulator := func() bool {
-		return rand.Intn(10) < 9
+		return rand.IntN(10) < 9
 	}
 	bookingService := service.New(bookingStorage, realPaymentSimulator)
 
@@ -107,7 +117,10 @@ func main() {
 
 	healthSrv := health.NewServer()
 	grpcSrv := grpc.NewServer(
-		grpc.UnaryInterceptor(interceptors.ServerRequestIDInterceptor()),
+		grpc.ChainUnaryInterceptor(
+			otelgrpc.UnaryServerInterceptor(),
+			interceptors.ServerRequestIDInterceptor(),
+		),
 	)
 	grpcserver.Register(grpcSrv, bookingService)
 	grpc_health_v1.RegisterHealthServer(grpcSrv, healthSrv)

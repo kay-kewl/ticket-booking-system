@@ -11,6 +11,11 @@ import (
 	eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
 )
 
+const (
+	defaultPageSize = 10
+	maxPageSize 	= 100
+)
+
 type Events interface {
 	ListEvents(ctx context.Context, pageNumber, pageSize int32) ([]*eventv1.Event, int64, error)
 }
@@ -34,7 +39,10 @@ func (s *serverAPI) ListEvents(ctx context.Context, req *eventv1.ListEventsReque
 
 	pageSize := req.GetPageSize()
 	if pageSize < 1 {
-		pageSize = 10
+		pageSize = defaultPageSize
+	}
+	if pageSize > maxPageSize {
+		pageSize = maxPageSize
 	}
 
 	events, totalCount, err := s.events.ListEvents(ctx, pageNumber, pageSize)

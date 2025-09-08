@@ -136,7 +136,7 @@ func (s *Storage) ConfirmBooking(ctx context.Context, bookingID int64) error {
 		return ErrBookingCannotBeChanged
 	}
 
-	metrics.BookingsTotal.WithLabelValues("confirmed").Inc()
+	metrics.BookingsTotal.WithLabelValues("CONFIRMED").Inc()
 
 	_, err = tx.Exec(
 		ctx,

@@ -5,4 +5,5 @@ CREATE TABLE IF NOT EXISTS events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_events ON events (title);
+CREATE INDEX IF NOT EXISTS idx_events_on_title ON events (title);
+CREATE INDEX IF NOT EXISTS idx_events_on_created_at ON events (created_at DESC);

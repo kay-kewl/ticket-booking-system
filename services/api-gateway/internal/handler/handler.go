@@ -47,14 +47,14 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Error("Failed to decode request body", "error", err)
+		log.ErrorContext(r.Context(), "Failed to decode request body", "error", err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	// TODO: validate email and password
 	if err := validate.Struct(req); err != nil {
-		log.Warn("Invalid request body for registration", "error", err)
+		log.WarnContext(r.Context(), "Invalid request body for registration", "error", err)
 		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -71,20 +71,20 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		if st, ok := status.FromError(err); ok {
 			switch st.Code() {
 			case codes.InvalidArgument:
-				log.Warn("Invalid argument for registration", "email", req.Email, "error", st.Message())
+				log.WarnContext(r.Context(), "Invalid argument for registration", "email", req.Email, "error", st.Message())
 				http.Error(w, st.Message(), http.StatusBadRequest)
 				return
 			case codes.AlreadyExists:
-				log.Warn("Attempt to register existing user", "email", req.Email)
+				log.WarnContext(r.Context(), "Attempt to register existing user", "email", req.Email)
 				http.Error(w, "user with this email already exists", http.StatusConflict)
 				return
 			default:
-				log.Error("gRPC call failed with unhandled status", "status", st.Code(), "error", err)
+				log.ErrorContext(r.Context(), "gRPC call failed with unhandled status", "status", st.Code(), "error", err)
 				http.Error(w, "internal server error", http.StatusInternalServerError)
 				return
 			}
 		}
-		log.Error("gRPC call failed", "error", err)
+		log.ErrorContext(r.Context(), "gRPC call failed", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -94,7 +94,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(grpcResp); err != nil {
-		log.Error("Failed to encode response", "error", err)
+		log.ErrorContext(r.Context(), "Failed to encode response", "error", err)
 	}
 }
 
@@ -110,13 +110,13 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Error("Failed to decode request body", "error", err)
+		log.ErrorContext(r.Context(), "Failed to decode request body", "error", err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if err := validate.Struct(req); err != nil {
-		log.Warn("Invalid request for body login", "error", err)
+		log.WarnContext(r.Context(), "Invalid request for body login", "error", err)
 		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -127,7 +127,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		log.Error("gRPC call failed", "error", err)
+		log.ErrorContext(r.Context(), "gRPC call failed", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -165,7 +165,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 
 	validateResp, err := h.authClient.ValidateToken(r.Context(), &authv1.ValidateTokenRequest{Token: token})
 	if err != nil {
-		log.Error("Token validation failed", "error", err)
+		log.ErrorContext(r.Context(), "Token validation failed", "error", err)
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
@@ -179,7 +179,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validate.Struct(req); err != nil {
-		log.Warn("Invalid request for body create booking", "error", err)
+		log.WarnContext(r.Context(), "Invalid request for body create booking", "error", err)
 		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -195,20 +195,20 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 			switch st.Code() {
 			case codes.FailedPrecondition:
 				if strings.Contains(st.Message(), "payment failed") {
-					log.Warn("Booking failed due to payment error", "userID", userID, "error", st.Message())
+					log.WarnContext(r.Context(), "Booking failed due to payment error", "userID", userID, "error", st.Message())
 					http.Error(w, "Payment failed", http.StatusConflict)
 					return
 				}
-				log.Warn("Attempt to book reserved seats", "userID", userID, "seats", req.SeatIDs, "error", st.Message())
+				log.WarnContext(r.Context(), "Attempt to book reserved seats", "userID", userID, "seats", req.SeatIDs, "error", st.Message())
 				http.Error(w, "booked seats have already been reserved", http.StatusConflict)
 				return
 			default:
-				log.Error("Unhandled gRPC error from booking-service", "userID", userID, "code", st.Code(), "error", st.Message())
+				log.ErrorContext(r.Context(), "Unhandled gRPC error from booking-service", "userID", userID, "code", st.Code(), "error", st.Message())
 				http.Error(w, "Failed to create booking due to an internal error", http.StatusInternalServerError)
 				return
 			}
 		}
-		log.Error("gRPC call to booking-service failed", "error", err)
+		log.ErrorContext(r.Context(), "gRPC call to booking-service failed", "error", err)
 		http.Error(w, "failed to create booking", http.StatusInternalServerError)
 		return
 	}
@@ -229,7 +229,7 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
-		log.Warn("Invalid page parameter. Must be a positive integer", "value", pageStr, "error", err)
+		log.WarnContext(r.Context(), "Invalid page parameter. Must be a positive integer", "value", pageStr, "error", err)
 		http.Error(w, "Invalid page parameter. Must be a positive integer", http.StatusBadRequest)
 		return
 	}
@@ -240,7 +240,7 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil || size < 1 {
-		log.Warn("Invalid size parameter. Must be a positive integer", "value", sizeStr, "error", err)
+		log.WarnContext(r.Context(), "Invalid size parameter. Must be a positive integer", "value", sizeStr, "error", err)
 		http.Error(w, "Invalid size parameter. Must be a positive integer", http.StatusBadRequest)
 		return
 	}
@@ -250,7 +250,7 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		PageSize:   int32(size),
 	})
 	if err != nil {
-		log.Error("gRPC call to event-service failed", "error", err)
+		log.ErrorContext(r.Context(), "gRPC call to event-service failed", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

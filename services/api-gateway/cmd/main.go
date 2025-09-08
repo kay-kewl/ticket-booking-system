@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	_ "google.golang.org/grpc/health"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
 	bookingv1 "github.com/kay-kewl/ticket-booking-system/gen/go/booking"
@@ -20,6 +22,7 @@ import (
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
 	"github.com/kay-kewl/ticket-booking-system/internal/grpc/interceptors"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
+	"github.com/kay-kewl/ticket-booking-system/internal/telemetry"
 	"github.com/kay-kewl/ticket-booking-system/services/api-gateway/internal/handler"
 	apimiddleware "github.com/kay-kewl/ticket-booking-system/services/api-gateway/internal/middleware"
 
@@ -30,6 +33,18 @@ func main() {
 	logger := logging.New()
 
 	logger.Info("API Gateway is starting up...")
+
+	shutdown, err := telemetry.InitTracerProvider(context.Background(), "api-gateway", "jaeger:4317")
+	if err != nil {
+		logger.Error("Failed to initialize tracer provider", "error", err)
+		os.Exit(1)
+	}
+	defer shutdown()
+
+	tracingOpt := grpc.WithStatsHandler(otelgrpc.NewClientHandler())
+	interceptorOpt := grpc.WithChainUnaryInterceptor(
+		interceptors.ClientRequestIDInterceptor(),
+	)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -54,11 +69,12 @@ func main() {
 	}`
 
 	authServiceAddr := fmt.Sprintf("auth-service:%s", cfg.AuthGRPCPort)
-	authServiceConn, err := grpc.Dial(
+	authServiceConn, err := grpc.NewClient(
 		authServiceAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(retryPolicy),
-		grpc.WithUnaryInterceptor(interceptors.ClientRequestIDInterceptor()),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		tracingOpt,
+		interceptorOpt,
 	)
 	if err != nil {
 		logger.Error("Failed to dial auth-service", "error", err)
@@ -69,11 +85,12 @@ func main() {
 	logger.Info("gRPC connection to auth-service established")
 
 	eventServiceAddr := fmt.Sprintf("event-service:%s", cfg.EventGRPCPort)
-	eventServiceConn, err := grpc.Dial(
+	eventServiceConn, err := grpc.NewClient(
 		eventServiceAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(retryPolicy),
-		grpc.WithUnaryInterceptor(interceptors.ClientRequestIDInterceptor()),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		tracingOpt,
+		interceptorOpt,
 	)
 	if err != nil {
 		logger.Error("Failed to dial event-service", "error", err)
@@ -84,11 +101,12 @@ func main() {
 	logger.Info("gRPC connection to event-service established")
 
 	bookingServiceAddr := fmt.Sprintf("booking-service:%s", cfg.BookingGRPCPort)
-	bookingServiceConn, err := grpc.Dial(
+	bookingServiceConn, err := grpc.NewClient(
 		bookingServiceAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(retryPolicy),
-		grpc.WithUnaryInterceptor(interceptors.ClientRequestIDInterceptor()),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		tracingOpt,
+		interceptorOpt,
 	)
 	if err != nil {
 		logger.Error("Failed to dial booking-service", slog.String("addr", bookingServiceAddr), "error", err)
@@ -126,6 +144,8 @@ func main() {
 	// })
 
 	var handlerWithMiddleware http.Handler = mux
+	handlerWithMiddleware = otelhttp.NewHandler(handlerWithMiddleware, "http.server")
+	// handlerWithMiddleware = apimiddleware.Idempotency(handlerWithMiddleware)
 	handlerWithMiddleware = apimiddleware.Metrics(handlerWithMiddleware)
 	handlerWithMiddleware = apimiddleware.RequestID(handlerWithMiddleware)
 

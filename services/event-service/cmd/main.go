@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,19 +14,41 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
 	"github.com/kay-kewl/ticket-booking-system/internal/database"
 	"github.com/kay-kewl/ticket-booking-system/internal/grpc/interceptors"
 	"github.com/kay-kewl/ticket-booking-system/internal/logging"
+	"github.com/kay-kewl/ticket-booking-system/internal/telemetry"
 	grpcserver "github.com/kay-kewl/ticket-booking-system/services/event-service/internal/grpc"
 	"github.com/kay-kewl/ticket-booking-system/services/event-service/internal/service"
 	"github.com/kay-kewl/ticket-booking-system/services/event-service/internal/storage"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
 	logger := logging.New()
 
 	logger.Info("Event Service is starting up...")
+
+	shutdown, err := telemetry.InitTracerProvider(context.Background(), "event-service", "jaeger:4317")
+	if err != nil {
+		logger.Error("Failed to initialize tracer provider", "error", err)
+		os.Exit(1)
+	}
+	defer shutdown()
+
+	go func() {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", promhttp.Handler())
+		port := "9102"
+		logger.Info("Starting metrics server", "port", port)
+		if err := http.ListenAndServe(":"+port, metricsMux); err != nil {
+			logger.Error("Metrics server failed to start", "error", err)
+		}
+	}()
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -55,7 +78,10 @@ func main() {
 	healthSrv := health.NewServer()
 
 	grpcSrv := grpc.NewServer(
-		grpc.UnaryInterceptor(interceptors.ServerRequestIDInterceptor()),
+		grpc.ChainUnaryInterceptor(
+			otelgrpc.UnaryServerInterceptor(),
+			interceptors.ServerRequestIDInterceptor(),
+		),
 	)
 
 	grpcserver.Register(grpcSrv, eventService, logger)

@@ -1,16 +1,19 @@
 package service
 
 import (
+    "bytes"
 	"context"
+    "encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+    "net/http"
 
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/storage"
 )
 
 var ErrSeatNotAvailable = errors.New("seat is not available")
-var ErrPaymentFailed = errors.New("payment failed")
+var ErrPaymentFailed = errors.New("failed to initiate payment")
 
 type BookingCreator interface {
 	CreateBooking(ctx context.Context, userID, eventID int64, seatIDs []int64) (int64, error)
@@ -23,13 +26,13 @@ type PaymentSimulator func() bool
 
 type Booking struct {
 	bookingCreator 		BookingCreator
-	paymentSimulator	PaymentSimulator
+	paymentServiceURL   string
 }
 
-func New(bookingCreator BookingCreator, paymentSimulator PaymentSimulator) *Booking {
+func New(bookingCreator BookingCreator, paymentServiceURL string) *Booking {
 	return &Booking{
 		bookingCreator: 	bookingCreator,
-		paymentSimulator:	paymentSimulator,
+		paymentServiceURL:	paymentServiceURL,
 	}
 }
 
@@ -45,31 +48,26 @@ func (b *Booking) CreateBooking(ctx context.Context, userID, eventID int64, seat
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
 
-	paymentSuccessful := b.paymentSimulator()
+    paymentReqPayload := map[string]interface{}{
+        "booking_id":   bookingID,
+        "amount":       1500.0,
+    }
 
-	if paymentSuccessful {
-		err = b.bookingCreator.ConfirmBooking(ctx, bookingID)
-		if err != nil {
-			// TODO:
-			// деньги списаны, но статус в бд не обновлен
-			// здесь должна быть логика для гарантированного повтора:
-			// 1. записать bookingID в отдельную таблицу failed_confirmations
-			// 2. фоновый воркер должен периодически пытаться подтвердить эти бронирования
-			// 3. должна быть настроена система алертинга, чтобы разработчики немедленно узнали о проблеме
-			slog.Error("CRITICAL: payment was successful but failed to confirm booking", "bookingID", bookingID, "error", err)
-			// не возвращаем внутреннюю ошибку клиенту
-			// вместо этого можно вернуть ID бронирования и сообщение о том, что оно обрабатывается,
-			// либо ошибку, которая укажет на необходимость связаться с поддержкой
-			return 0, fmt.Errorf("%s: critical error - failed to confirm booking after payment: %w", op, err)
-		}
-		return bookingID, nil
-	} 
+    body, err := json.Marshal(paymentReqPayload)
+    if err != nil {
+        b.bookingCreator.CancelBooking(context.Background(), bookingID)
+        return 0, fmt.Errorf("failed to create payment request payload: %w", err)
+    }
 
-	err = b.bookingCreator.CancelBooking(ctx, bookingID)
-	if err != nil {
-		slog.Error("Payment failed and failed to automatically cancel booking", "bookingID", bookingID, "error", err)
-	}
-	return 0, ErrPaymentFailed
+    resp, err := http.Post(b.paymentServiceURL, "application/json", bytes.NewBuffer(body))
+    if err != nil || resp.StatusCode != http.StatusAccepted {
+        slog.Error("failed to initiate payment", "booking_id", bookingID, "error", err, "status_code", resp.StatusCode)
+        b.bookingCreator.CancelBooking(context.Background(), bookingID)
+        return 0, ErrPaymentFailed
+    }
+
+    slog.Info("Booking created and payment initiated successfully", "booking_id", bookingID)
+    return bookingID, nil
 }
 
 func (b *Booking) CancelBooking(ctx context.Context, bookingID int64) error {

@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BookingService_CreateBooking_FullMethodName = "/booking.BookingService/CreateBooking"
+	BookingService_CreateBooking_FullMethodName        = "/booking.BookingService/CreateBooking"
+	BookingService_HandlePaymentWebhook_FullMethodName = "/booking.BookingService/HandlePaymentWebhook"
 )
 
 // BookingServiceClient is the client API for BookingService service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BookingServiceClient interface {
 	CreateBooking(ctx context.Context, in *CreateBookingRequest, opts ...grpc.CallOption) (*CreateBookingResponse, error)
+	HandlePaymentWebhook(ctx context.Context, in *HandlePaymentWebhookRequest, opts ...grpc.CallOption) (*HandlePaymentWebhookResponse, error)
 }
 
 type bookingServiceClient struct {
@@ -47,11 +49,22 @@ func (c *bookingServiceClient) CreateBooking(ctx context.Context, in *CreateBook
 	return out, nil
 }
 
+func (c *bookingServiceClient) HandlePaymentWebhook(ctx context.Context, in *HandlePaymentWebhookRequest, opts ...grpc.CallOption) (*HandlePaymentWebhookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HandlePaymentWebhookResponse)
+	err := c.cc.Invoke(ctx, BookingService_HandlePaymentWebhook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BookingServiceServer is the server API for BookingService service.
 // All implementations must embed UnimplementedBookingServiceServer
 // for forward compatibility.
 type BookingServiceServer interface {
 	CreateBooking(context.Context, *CreateBookingRequest) (*CreateBookingResponse, error)
+	HandlePaymentWebhook(context.Context, *HandlePaymentWebhookRequest) (*HandlePaymentWebhookResponse, error)
 	mustEmbedUnimplementedBookingServiceServer()
 }
 
@@ -64,6 +77,9 @@ type UnimplementedBookingServiceServer struct{}
 
 func (UnimplementedBookingServiceServer) CreateBooking(context.Context, *CreateBookingRequest) (*CreateBookingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateBooking not implemented")
+}
+func (UnimplementedBookingServiceServer) HandlePaymentWebhook(context.Context, *HandlePaymentWebhookRequest) (*HandlePaymentWebhookResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HandlePaymentWebhook not implemented")
 }
 func (UnimplementedBookingServiceServer) mustEmbedUnimplementedBookingServiceServer() {}
 func (UnimplementedBookingServiceServer) testEmbeddedByValue()                        {}
@@ -104,6 +120,24 @@ func _BookingService_CreateBooking_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BookingService_HandlePaymentWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HandlePaymentWebhookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BookingServiceServer).HandlePaymentWebhook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BookingService_HandlePaymentWebhook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BookingServiceServer).HandlePaymentWebhook(ctx, req.(*HandlePaymentWebhookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BookingService_ServiceDesc is the grpc.ServiceDesc for BookingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +148,10 @@ var BookingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateBooking",
 			Handler:    _BookingService_CreateBooking_Handler,
+		},
+		{
+			MethodName: "HandlePaymentWebhook",
+			Handler:    _BookingService_HandlePaymentWebhook_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

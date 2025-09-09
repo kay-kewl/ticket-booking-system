@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -10,10 +11,13 @@ import (
 
 	bookingv1 "github.com/kay-kewl/ticket-booking-system/gen/go/booking"
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/service"
+	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/storage"
 )
 
 type Booking interface {
 	CreateBooking(ctx context.Context, userID, eventID int64, seatIDs []int64) (int64, error)
+	ConfirmBooking(ctx context.Context, bookingID int64) error
+	CancelBooking(ctx context.Context, bookingID int64) error
 }
 
 type serverAPI struct {
@@ -39,4 +43,28 @@ func (s *serverAPI) CreateBooking(ctx context.Context, req *bookingv1.CreateBook
 	}
 
 	return &bookingv1.CreateBookingResponse{BookingId: bookingID}, nil
+}
+
+func (s *Server) HandlePaymentWebhook(ctx context.Context, req *bookingv1.HandlePaymentWebhookRequest) (*bookingv1.HandlePaymentWebhookResponse, error) {
+	statusStr := strings.ToUpper(req.GetStatus())
+	var err error
+
+	switch statusStr {
+	case "CONFIRMED":
+		err = s.booking.ConfirmBooking(ctx, req.GetBookingId())
+	case "FAILED":
+		err = s.booking.CancelBooking(ctx, req.GetBookingId())
+	default:
+		return nil, status.Error(codes.InvalidArgument, "unknown payment status received")
+	}
+
+	if err != nil {
+		if errors.Is(err, storage.ErrBookingCannotBeChanged) {
+			slog.InfoContext(ctx, "Idempotent webhook call detected", "booking_id", req.GetBookingId())
+			return &bookingv1.HandlePaymentWebhookResponse{}, nil
+		}
+		return nil, status.Error(codes.Internal, "failed to handle payment webhook")
+	}
+
+	return &bookingv1.HandlePaymentWebhookResponse{}, nil
 }

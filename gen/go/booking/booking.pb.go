@@ -125,6 +125,94 @@ func (x *CreateBookingResponse) GetBookingId() int64 {
 	return 0
 }
 
+type HandlePaymentWebhookRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BookingId     int64                  `protobuf:"varint,1,opt,name=booking_id,json=bookingId,proto3" json:"booking_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HandlePaymentWebhookRequest) Reset() {
+	*x = HandlePaymentWebhookRequest{}
+	mi := &file_booking_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HandlePaymentWebhookRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HandlePaymentWebhookRequest) ProtoMessage() {}
+
+func (x *HandlePaymentWebhookRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_booking_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HandlePaymentWebhookRequest.ProtoReflect.Descriptor instead.
+func (*HandlePaymentWebhookRequest) Descriptor() ([]byte, []int) {
+	return file_booking_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *HandlePaymentWebhookRequest) GetBookingId() int64 {
+	if x != nil {
+		return x.BookingId
+	}
+	return 0
+}
+
+func (x *HandlePaymentWebhookRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type HandlePaymentWebhookResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HandlePaymentWebhookResponse) Reset() {
+	*x = HandlePaymentWebhookResponse{}
+	mi := &file_booking_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HandlePaymentWebhookResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HandlePaymentWebhookResponse) ProtoMessage() {}
+
+func (x *HandlePaymentWebhookResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_booking_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HandlePaymentWebhookResponse.ProtoReflect.Descriptor instead.
+func (*HandlePaymentWebhookResponse) Descriptor() ([]byte, []int) {
+	return file_booking_proto_rawDescGZIP(), []int{3}
+}
+
 var File_booking_proto protoreflect.FileDescriptor
 
 const file_booking_proto_rawDesc = "" +
@@ -136,9 +224,15 @@ const file_booking_proto_rawDesc = "" +
 	"\bseat_ids\x18\x03 \x03(\x03R\aseatIds\"6\n" +
 	"\x15CreateBookingResponse\x12\x1d\n" +
 	"\n" +
-	"booking_id\x18\x01 \x01(\x03R\tbookingId2`\n" +
+	"booking_id\x18\x01 \x01(\x03R\tbookingId\"T\n" +
+	"\x1bHandlePaymentWebhookRequest\x12\x1d\n" +
+	"\n" +
+	"booking_id\x18\x01 \x01(\x03R\tbookingId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"\x1e\n" +
+	"\x1cHandlePaymentWebhookResponse2\xc5\x01\n" +
 	"\x0eBookingService\x12N\n" +
-	"\rCreateBooking\x12\x1d.booking.CreateBookingRequest\x1a\x1e.booking.CreateBookingResponseB\x15Z\x13./booking;bookingv1b\x06proto3"
+	"\rCreateBooking\x12\x1d.booking.CreateBookingRequest\x1a\x1e.booking.CreateBookingResponse\x12c\n" +
+	"\x14HandlePaymentWebhook\x12$.booking.HandlePaymentWebhookRequest\x1a%.booking.HandlePaymentWebhookResponseB\x15Z\x13./booking;bookingv1b\x06proto3"
 
 var (
 	file_booking_proto_rawDescOnce sync.Once
@@ -152,16 +246,20 @@ func file_booking_proto_rawDescGZIP() []byte {
 	return file_booking_proto_rawDescData
 }
 
-var file_booking_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_booking_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_booking_proto_goTypes = []any{
-	(*CreateBookingRequest)(nil),  // 0: booking.CreateBookingRequest
-	(*CreateBookingResponse)(nil), // 1: booking.CreateBookingResponse
+	(*CreateBookingRequest)(nil),         // 0: booking.CreateBookingRequest
+	(*CreateBookingResponse)(nil),        // 1: booking.CreateBookingResponse
+	(*HandlePaymentWebhookRequest)(nil),  // 2: booking.HandlePaymentWebhookRequest
+	(*HandlePaymentWebhookResponse)(nil), // 3: booking.HandlePaymentWebhookResponse
 }
 var file_booking_proto_depIdxs = []int32{
 	0, // 0: booking.BookingService.CreateBooking:input_type -> booking.CreateBookingRequest
-	1, // 1: booking.BookingService.CreateBooking:output_type -> booking.CreateBookingResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	2, // 1: booking.BookingService.HandlePaymentWebhook:input_type -> booking.HandlePaymentWebhookRequest
+	1, // 2: booking.BookingService.CreateBooking:output_type -> booking.CreateBookingResponse
+	3, // 3: booking.BookingService.HandlePaymentWebhook:output_type -> booking.HandlePaymentWebhookResponse
+	2, // [2:4] is the sub-list for method output_type
+	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -178,7 +276,7 @@ func file_booking_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_booking_proto_rawDesc), len(file_booking_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

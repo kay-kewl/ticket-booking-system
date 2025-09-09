@@ -23,14 +23,16 @@ type Handler struct {
 	bookingClient bookingv1.BookingServiceClient
 	eventClient   eventv1.EventServiceClient
 	logger        *slog.Logger
+	webhookSecret []byte
 }
 
-func New(authClient authv1.AuthClient, bookingClient bookingv1.BookingServiceClient, eventClient eventv1.EventServiceClient, logger *slog.Logger) *Handler {
+func New(authClient authv1.AuthClient, bookingClient bookingv1.BookingServiceClient, eventClient eventv1.EventServiceClient, webhookSecret string, logger *slog.Logger) *Handler {
 	return &Handler{
 		authClient:    authClient,
 		bookingClient: bookingClient,
 		eventClient:   eventClient,
 		logger:        logger,
+		webhookSecret: []byte(webhookSecret),
 	}
 }
 
@@ -258,4 +260,68 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(grpcResp)
+}
+
+type paymentWebhookPayload struct {
+	BookingID 	int64 	`json:"booking_id"`
+	Status 		string 	`json:"status"`
+	Timestamp	string 	`json:"timestamp"`
+}
+
+func (h *Handler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Cannot read body", http.StatusBadRequest)
+		return
+	}
+
+	receivedSig := r.Header.Get("X-Webhook-Signature")
+	if !h.isValidSignature(body, receivedSig) {
+		http.Error(w, "Invalid signature", http.StatusForbidden)
+		return
+	}
+
+	var payload paymentWebhookPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	ts, err := time.Parse(time.RFC3339, payload.Timestamp)
+	if err != nil {
+		http.Error(w, "Invalid timestamp format", http.StatusBadRequest)
+		return
+	}
+
+	if time.Since(ts) > 5*time.Minute {
+		http.Error(w, "Webhook timestamp is too old", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Minute)
+	defer cancel()
+
+	_, err := h.bookingClient.HandlePaymentWebhook(ctx, &bookingv1.HandlePaymentWebhookRequest{
+		BookingId: 	payload.BookingID,
+		Status: 	payload.Status,
+	})
+
+	if err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() == codes.InvalidArgument {
+			http.Error(w, st.Message(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "Upstream service error", http.StatusServiceUnavailable)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) isValidSignature(body []byte, receivedSignature string) bool {
+	mac := hmac.New(sha256.New, h.webhookSecret)
+	mac.Write(body)
+	expectedSignature := hex.EncodeToString(mac.Sum(nil))
+
+	return subtle.ConstantTimeCompare([]byte(receivedSignature), []byte(expectedSignature)) == 1
 }

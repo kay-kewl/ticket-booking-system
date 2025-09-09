@@ -125,13 +125,14 @@ func main() {
 		}
 	}()
 
-	h := handler.New(authClient, bookingClient, eventClient, logger)
+	h := handler.New(authClient, bookingClient, eventClient, cfg.PaymentWebhookSecret, logger)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/register", h.Register)
 	mux.HandleFunc("POST /api/v1/login", h.Login)
 	mux.HandleFunc("GET /api/v1/events", h.ListEvents)
 	mux.HandleFunc("POST /api/v1/bookings", h.CreateBooking)
+	mux.HandleFunc("POST /api/v1/payments/webhook", h.PaymentWebhook)
 	// mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 	// 	if err := dbPool.Ping(r.Context()); err != nil {
 	// 		logger.Error("Database ping failed", "error", err)

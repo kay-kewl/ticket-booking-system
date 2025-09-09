@@ -14,6 +14,14 @@ message CreateBookingResponse {
 	int64 booking_id = 1;
 }
 
+message HandlePaymentWebhookRequest {
+	int64 booking_id = 1;
+	string status = 2;
+}
+
+message HandlePaymentWebhookResponse {}
+
 service BookingService {
 	rpc CreateBooking(CreateBookingRequest) returns (CreateBookingResponse);
+	rpc HandlePaymentWebhook(HandlePaymentWebhookRequest) returns (HandlePaymentWebhookResponse);
 }

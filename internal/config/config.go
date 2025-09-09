@@ -7,14 +7,15 @@ import (
 )
 
 type Config struct {
-	APIPort         string
-	AuthGRPCPort    string
-	BookingGRPCPort string
-	DatabaseSchema  string
-	EventGRPCPort   string
-	PostgresURL     string
-	RabbitMQURL     string
-	JWTSecret       string
+	APIPort         		string
+	AuthGRPCPort    		string
+	BookingGRPCPort 		string
+	DatabaseSchema  		string
+	EventGRPCPort   		string
+	PostgresURL     		string
+	RabbitMQURL     		string
+	JWTSecret       		string
+	PaymentWebhookSecret	string
 }
 
 func getEnv(key, defaultValue string) string {
@@ -43,15 +44,21 @@ func Load() (*Config, error) {
 		return nil, errors.New("JWT_SECRET environmental variable is not set or empty")
 	}
 
+	webhookSecret, ok := os.LookupEnv("PAYMENT_WEBHOOK_SECRET")
+	if !ok || webhookSecret == "" {
+		return nil, errors.New("PAYMENT_WEBHOOK_SECRET environmental variable is not set or empty")
+	}
+
 	cfg := &Config{
-		APIPort:         getEnv("API_PORT", "8080"),
-		AuthGRPCPort:    getEnv("AUTH_GRPC_PORT", "50051"),
-		BookingGRPCPort: getEnv("BOOKING_GRPC_PORT", "50053"),
-		DatabaseSchema:  schema,
-		EventGRPCPort:   getEnv("EVENT_GRPC_PORT", "50052"),
-		PostgresURL:     postgresURL,
-		RabbitMQURL:     getEnv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"),
-		JWTSecret:       jwtSecret,
+		APIPort:         		getEnv("API_PORT", "8080"),
+		AuthGRPCPort:    		getEnv("AUTH_GRPC_PORT", "50051"),
+		BookingGRPCPort: 		getEnv("BOOKING_GRPC_PORT", "50053"),
+		DatabaseSchema:  		schema,
+		EventGRPCPort:   		getEnv("EVENT_GRPC_PORT", "50052"),
+		PostgresURL:     		postgresURL,
+		RabbitMQURL:     		getEnv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"),
+		JWTSecret:       		jwtSecret,
+		PaymentWebhookSecret: 	webhookSecret,
 	}
 
 	return cfg, nil

@@ -158,6 +158,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - RABBITMQ_URL=${RABBITMQ_URL}
       - DATABASE_SCHEMA=booking
+      - PAYMENT_SERVICE_URL=http://payment-service:8081/v1/payments
     # volumes:
     #   - ./services/booking-service/migrations:/app/migrations
     # command: sh -c "PGPASSWORD=$${POSTGRES_PASSWORD} psql -U $${POSTGRES_USER} -h postgres -d $${POSTGRES_DB} -c \"CREATE SCHEMA IF NOT EXISTS $${DATABASE_SCHEMA};\" && migrate -path /app/migrations -database \"postgres://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres:$${POSTGRES_PORT}/$${POSTGRES_DB}?sslmode=disable&search_path=$${DATABASE_SCHEMA}\" -verbose up && /app/server"
@@ -166,12 +167,42 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+      payment-service:
+	condition: service_started
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50053"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - booking-net
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: ./services/payment-service/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - PAYMENT_WEBHOOK_SECRET=${PAYMENT_WEBHOOK_SECRET}
+      - WEBHOOK_TARGET_URL=http://api-gateway:8080/api/v1/payments/webhook
+    networks:
+      - booking-net
+
+  ticket-worker:
+    build:
+      context: .
+      dockerfile: ./services/ticket-worker/Dockerfile
+    environment:
+      - RABBITMQ_URL=${RABBITMQ_URL}
+      - TICKET_OUTPUT_PATH=/tickets
+      # - BOOKING_SERVICE_ADDR=booking-service:50053
+    volumes:
+      - ticket-storage:/tickets
+    depends_on:
+      rabbitmq:
+	condition: service_healthy
     networks:
       - booking-net
 
@@ -209,6 +240,7 @@ services:
 
 volumes:
   pgdata:
+  ticket-storage:
 
 networks:
   booking-net:

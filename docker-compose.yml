@@ -190,6 +190,19 @@ services:
     networks:
       - booking-net
 
+  notification-worker:
+    build:
+      context: .
+      dockerfile: ./services/notification-worker/Dockerfile
+    environment:
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    depends_on:
+      rabbitmq:
+	condition:
+	  service_healthy
+    networks:
+      - booking-net
+
   ticket-worker:
     build:
       context: .

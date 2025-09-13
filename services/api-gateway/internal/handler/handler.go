@@ -1,11 +1,18 @@
 package handler
 
 import (
-	"encoding/json"
+    "context"
+    "crypto/hmac"
+    "crypto/sha256"
+    "crypto/subtle"
+    "encoding/hex"
+    "encoding/json"
+    "io"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+    "time"
 
 	authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
 	bookingv1 "github.com/kay-kewl/ticket-booking-system/gen/go/booking"
@@ -129,14 +136,28 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		log.ErrorContext(r.Context(), "gRPC call failed", "error", err)
+        if st, ok := status.FromError(err); ok {
+            switch st.Code() {
+            case codes.Unauthenticated:
+                log.WarnContext(r.Context(), "Invalid login credentials", "email", req.Email)
+                http.Error(w, "invalid email or password", http.StatusUnauthorized)
+                return
+            default:
+                log.ErrorContext(r.Context(), "gRPC call to auth.Login failed with unhandled status", "status", st.Code(), "error", err)
+                http.Error(w, "internal server error", http.StatusInternalServerError)
+                return
+            }
+        }
+		log.ErrorContext(r.Context(), "gRPC call to auth.Login failed with unknown status", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(grpcResp)
+    if err := json.NewEncoder(w).Encode(grpcResp); err != nil {
+        log.ErrorContext(r.Context(), "Failed to encode response", "error", err)
+    }
 }
 
 type CreateBookingRequest struct {
@@ -269,26 +290,31 @@ type paymentWebhookPayload struct {
 }
 
 func (h *Handler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
+    r.Body = http.MaxBytesReader(w, r.Body, 1024 * 1024)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Cannot read body", http.StatusBadRequest)
+        h.logger.WarnContext(r.Context(), "Failed to read webhook body", "error", err)
+		http.Error(w, "Cannot read body or body too large", http.StatusBadRequest)
 		return
 	}
 
 	receivedSig := r.Header.Get("X-Webhook-Signature")
 	if !h.isValidSignature(body, receivedSig) {
+        h.logger.WarnContext(r.Context(), "Invalid webhook signature received")
 		http.Error(w, "Invalid signature", http.StatusForbidden)
 		return
 	}
 
 	var payload paymentWebhookPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
+        h.logger.WarnContext(r.Context(), "Failed to unmarshal webhook payload", "error", err)
 		http.Error(w, "Invalid payload", http.StatusBadRequest)
 		return
 	}
 
 	ts, err := time.Parse(time.RFC3339, payload.Timestamp)
 	if err != nil {
+        h.logger.WarnContext(r.Context(), "Invalid timestamp format in webhook", "timestamp", payload.Timestamp, "error", err)
 		http.Error(w, "Invalid timestamp format", http.StatusBadRequest)
 		return
 	}
@@ -301,7 +327,7 @@ func (h *Handler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Minute)
 	defer cancel()
 
-	_, err := h.bookingClient.HandlePaymentWebhook(ctx, &bookingv1.HandlePaymentWebhookRequest{
+	_, err = h.bookingClient.HandlePaymentWebhook(ctx, &bookingv1.HandlePaymentWebhookRequest{
 		BookingId: 	payload.BookingID,
 		Status: 	payload.Status,
 	})

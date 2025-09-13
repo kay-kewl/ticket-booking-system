@@ -29,8 +29,10 @@ func Metrics(next http.Handler) http.Handler {
 			duration := time.Since(start).Seconds()
 			statusCodeStr := strconv.Itoa(rw.statusCode)
 
-			metrics.HTTPRequestsTotal.WithLabelValues(r.Method, r.URL.Path, statusCodeStr).Inc()
-			metrics.HTTPRequestDuration.WithLabelValues(r.Method, r.URL.Path).Observe(duration)
+            path := r.URL.Path
+
+			metrics.HTTPRequestsTotal.WithLabelValues(r.Method, path, statusCodeStr).Inc()
+			metrics.HTTPRequestDuration.WithLabelValues(r.Method, path).Observe(duration)
 		},
 	)
 }

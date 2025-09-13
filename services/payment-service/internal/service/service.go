@@ -1,10 +1,13 @@
 package service
+
 import (
     "bytes"
     "crypto/hmac"
     "crypto/sha256"
     "encoding/hex"
     "encoding/json"
+    "fmt"
+    "io"
     "log/slog"
     "math/rand/v2"
     "net/http"
@@ -27,7 +30,7 @@ func New(logger *slog.Logger, targetURL, secret string) *PaymentService {
 
 type CreatePaymentRequest struct {
     BookingID   int64   `json:"booking_id"`
-    Amount      float64 `json:"amount`
+    Amount      float64 `json:"amount"`
 }
 
 type CreatePaymentResponse struct {
@@ -44,7 +47,7 @@ func (s *PaymentService) CreatePaymentHandler(w http.ResponseWriter, r *http.Req
 
     s.logger.Info("Payment creation request received", "booking_id", req.BookingID)
 
-    go s.simulatePaymentAndSendWebhook(req.RequestID)
+    go s.simulatePaymentAndSendWebhook(req.BookingID)
 
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusAccepted)
@@ -78,7 +81,7 @@ func (s *PaymentService) simulatePaymentAndSendWebhook(bookingID int64) {
     maxRetries := 3
     for i := 0; i < maxRetries; i++ {
         err = s.sendWebhook(body, signature)
-        if err != nil {
+        if err == nil {
             s.logger.Info("Webhook sent successfully", "booking_id", bookingID, "status", status)
             return
         }
@@ -95,17 +98,17 @@ func (s *PaymentService) sendWebhook(body []byte, signature string) error {
     if err != nil {
         return err
     }
-    req.Header.Set("Content-Type", "application/json)
+    req.Header.Set("Content-Type", "application/json")
     req.Header.Set("X-Webhook-Signature", signature)
 
-    client := &http.Client(Timeout: 1 * time.Minute)
+    client := &http.Client{Timeout: 1 * time.Minute}
     resp, err := client.Do(req)
     if err != nil {
         return err
     }
     defer resp.Body.Close()
 
-    if resp.StatusCode == 400 {
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
         respBody, _ := io.ReadAll(resp.Body)
         return fmt.Errorf("webhook target returned status %d: %s", resp.StatusCode, string(respBody))
     }

@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+    "time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+    authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
+    eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
 
 	"github.com/kay-kewl/ticket-booking-system/internal/metrics"
 )
@@ -17,7 +21,9 @@ var ErrSeatNotAvailable = errors.New("seat is not available or does not exist")
 var ErrBookingCannotBeChanged = errors.New("booking is not in a state that can be changed")
 
 type Storage struct {
-	db *pgxpool.Pool
+	db          *pgxpool.Pool
+    authClient  authv1.AuthClient
+    eventClient eventv1.EventServiceClient
 }
 
 type OutboxMessage struct {
@@ -26,8 +32,12 @@ type OutboxMessage struct {
 	Payload    []byte
 }
 
-func New(db *pgxpool.Pool) *Storage {
-	return &Storage{db: db}
+func New(db *pgxpool.Pool, authClient authv1.AuthClient, eventClient eventv1.EventServiceClient) *Storage {
+	return &Storage{
+        db:             db,
+        authClient:     authClient,
+        eventClient:    eventClient,
+    }
 }
 
 func (s *Storage) CreateBooking(ctx context.Context, userID, eventID int64, seatIDs []int64) (int64, error) {
@@ -124,6 +134,19 @@ func (s *Storage) ConfirmBooking(ctx context.Context, bookingID int64) error {
 	}
 	defer tx.Rollback(ctx)
 
+    var userID, eventID int64
+    err = tx.QueryRow(
+        ctx, 
+        "SELECT user_id, event_id FROM booking.bookings WHERE id = $1 FOR UPDATE",
+        bookingID,
+    ).Scan(&userID, &eventID)
+    if err != nil {
+        if errors.Is(err, pgx.ErrNoRows) {
+            return ErrBookingCannotBeChanged
+        }
+        return fmt.Errorf("%s: failed to get booking details: %w", op, err)
+    }
+
 	tag, err := tx.Exec(
 		ctx,
 		"UPDATE booking.bookings SET status = 'CONFIRMED' WHERE id = $1 AND status = 'PENDING'",
@@ -147,7 +170,27 @@ func (s *Storage) ConfirmBooking(ctx context.Context, bookingID int64) error {
 		return fmt.Errorf("%s: failed to update seat status to BOOKED: %w", op, err)
 	}
 
-	payload, err := json.Marshal(map[string]int64{"booking_id": bookingID})
+    enrichCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+    defer cancel()
+
+    userDetails, err := s.authClient.GetUserDetails(enrichCtx, &authv1.GetUserDetailsRequest{UserId: userID})
+    if err != nil {
+        return fmt.Errorf("%s: failed to get user details for outbox message: %w", op, err)
+    }
+
+    eventDetails, err := s.eventClient.GetEvent(enrichCtx, &eventv1.GetEventRequest{EventId: eventID})
+    if err != nil {
+        return fmt.Errorf("%s: failed to get event details for outbox message: %w", op, err)
+    }
+
+    payloadMap := map[string]interface{}{
+        "booking_id":   bookingID,
+        "user_email":   userDetails.GetEmail(),
+        "event_title":  eventDetails.GetTitle(),
+        // TODO: add whatever's needed
+    }
+
+	payload, err := json.Marshal(payloadMap)
 	if err != nil {
 		return fmt.Errorf("%s: failed to marshal outbox payload: %w", op, err)
 	}
@@ -217,7 +260,7 @@ func (s *Storage) updateBookingStatus(ctx context.Context, tx pgx.Tx, bookingID 
 	}
 
 	if tag.RowsAffected() == 0 {
-		return nil
+		return ErrBookingCannotBeChanged 
 	}
 
 	metrics.BookingsTotal.WithLabelValues(newStatus).Inc()

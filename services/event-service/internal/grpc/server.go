@@ -18,6 +18,7 @@ const (
 
 type Events interface {
 	ListEvents(ctx context.Context, pageNumber, pageSize int32) ([]*eventv1.Event, int64, error)
+    GetEvent(ctx context.Context, eventID int64) (*eventv1.Event, error)
 }
 
 type serverAPI struct {
@@ -51,4 +52,21 @@ func (s *serverAPI) ListEvents(ctx context.Context, req *eventv1.ListEventsReque
 	}
 
 	return &eventv1.ListEventsResponse{Events: events, TotalCount: totalCount}, nil
+}
+
+func (s *serverAPI) GetEvent(ctx context.Context, req *eventv1.GetEventRequest) (*eventv1.Event, error) {
+    s.log.InfoContext(ctx, "GetEvent request received", "event_id", req.GetEventId())
+
+    if req.GetEventId() <= 0 {
+        return nil, status.Error(codes.InvalidArgument, "event_id must be positive")
+    }
+
+    event, err := s.events.GetEvent(ctx, req.GetEventId())
+    if err != nil {
+        // TODO: not found -> codes.NotFound
+        s.log.ErrorContext(ctx, "Failed to get event", "error", err)
+        return nil, status.Error(codes.Internal, "failed to get event")
+    }
+
+    return event, nil
 }

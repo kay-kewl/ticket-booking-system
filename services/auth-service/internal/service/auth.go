@@ -21,6 +21,7 @@ type UserSaver interface {
 
 type UserProvider interface {
 	User(ctx context.Context, email string) (id int64, passHash []byte, err error)
+    UserDetails(ctx context.Context, userID int64) (email string, err error)
 }
 
 type Auth struct {
@@ -115,4 +116,18 @@ func (a *Auth) ValidateToken(ctx context.Context, tokenString string) (int64, er
 	}
 
 	return 0, fmt.Errorf("%s: invalid token", op)
+}
+
+func (a *Auth) GetUserDetails(ctx context.Context, userID int64) (string, error) {
+    const op = "Auth.GetUserDetails"
+
+    email, err := a.userProvider.UserDetails(ctx, userID)
+    if err != nil {
+        if errors.Is(err, storage.ErrUserNotFound) {
+            return "", fmt.Errorf("%s: %w", op, err)
+        }
+        return "", fmt.Errorf("%s: %w", op, err)
+    }
+
+    return email, nil
 }

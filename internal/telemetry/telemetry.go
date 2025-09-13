@@ -19,12 +19,15 @@ func InitTracerProvider(ctx context.Context, serviceName, jaegerURL string) (fun
 		ctx,
 		resource.WithAttributes(
 			semconv.ServiceName(serviceName),
+            semconv.ServiceVersion("1.0.0"),
+            semconv.DeploymentEnvironmentName("development"),
 		),
 	)
 	if err != nil {
 		return nil, err
 	}
 
+    // should be replaced with secure credentials
 	conn, err := grpc.NewClient(
 		jaegerURL,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),

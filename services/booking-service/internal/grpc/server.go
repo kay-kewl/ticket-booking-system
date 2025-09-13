@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+    "log/slog"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -45,7 +46,7 @@ func (s *serverAPI) CreateBooking(ctx context.Context, req *bookingv1.CreateBook
 	return &bookingv1.CreateBookingResponse{BookingId: bookingID}, nil
 }
 
-func (s *Server) HandlePaymentWebhook(ctx context.Context, req *bookingv1.HandlePaymentWebhookRequest) (*bookingv1.HandlePaymentWebhookResponse, error) {
+func (s *serverAPI) HandlePaymentWebhook(ctx context.Context, req *bookingv1.HandlePaymentWebhookRequest) (*bookingv1.HandlePaymentWebhookResponse, error) {
 	statusStr := strings.ToUpper(req.GetStatus())
 	var err error
 

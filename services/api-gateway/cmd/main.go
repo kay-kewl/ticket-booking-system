@@ -51,6 +51,10 @@ func main() {
 		logger.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
 	}
+    if cfg.PaymentWebhookSecret == "" {
+        logger.Error("PAYMENT_WEBHOOK_SECRET environmental variable is not set")
+        os.Exit(1)
+    }
 
 	// ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
 	// defer cancel()
@@ -69,6 +73,7 @@ func main() {
 	}`
 
 	authServiceAddr := fmt.Sprintf("auth-service:%s", cfg.AuthGRPCPort)
+    // should be replaced with secure credentials
 	authServiceConn, err := grpc.NewClient(
 		authServiceAddr,
 		grpc.WithDefaultServiceConfig(retryPolicy),
@@ -85,6 +90,7 @@ func main() {
 	logger.Info("gRPC connection to auth-service established")
 
 	eventServiceAddr := fmt.Sprintf("event-service:%s", cfg.EventGRPCPort)
+    // should be replaced with secure credentials
 	eventServiceConn, err := grpc.NewClient(
 		eventServiceAddr,
 		grpc.WithDefaultServiceConfig(retryPolicy),
@@ -101,6 +107,7 @@ func main() {
 	logger.Info("gRPC connection to event-service established")
 
 	bookingServiceAddr := fmt.Sprintf("booking-service:%s", cfg.BookingGRPCPort)
+    // should be replaced with secure credentials
 	bookingServiceConn, err := grpc.NewClient(
 		bookingServiceAddr,
 		grpc.WithDefaultServiceConfig(retryPolicy),

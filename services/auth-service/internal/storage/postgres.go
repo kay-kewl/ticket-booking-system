@@ -58,3 +58,19 @@ func (s *Storage) User(ctx context.Context, email string) (int64, []byte, error)
 
 	return id, passHash, nil
 }
+
+func (s *Storage) UserDetails(ctx context.Context, userID int64) (email string, err error) {
+    const op = "storage.UserDetails"
+
+    query := "SELECT email FROM auth.users WHERE id = $1"
+
+    err = s.db.QueryRow(ctx, query, userID).Scan(&email)
+    if err != nil {
+        if errors.Is(err, pgx.ErrNoRows) {
+            return "", fmt.Errorf("%s: %w", op, ErrUserNotFound)
+        }
+        return "", fmt.Errorf("%s: %w", op, err)
+    }
+
+    return email, nil
+}

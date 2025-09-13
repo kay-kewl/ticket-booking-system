@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
@@ -17,10 +16,14 @@ import (
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+    "google.golang.org/grpc/credentials/insecure"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
+    authv1 "github.com/kay-kewl/ticket-booking-system/gen/go/auth"
+    eventv1 "github.com/kay-kewl/ticket-booking-system/gen/go/event"
 
 	"github.com/kay-kewl/ticket-booking-system/internal/config"
 	"github.com/kay-kewl/ticket-booking-system/internal/database"
@@ -93,11 +96,27 @@ func main() {
 
 	defer dbPool.Close()
 
-	bookingStorage := storage.New(dbPool)
-	realPaymentSimulator := func() bool {
-		return rand.IntN(10) < 9
-	}
-	bookingService := service.New(bookingStorage, realPaymentSimulator)
+    authServiceAddr := fmt.Sprintf("auth-service:%s", cfg.AuthGRPCPort)
+    authServiceConn, err := grpc.NewClient(authServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+    if err != nil {
+        logger.Error("Failed to dial auth-service", "error", err)
+        os.Exit(1)
+    }
+    defer authServiceConn.Close()
+    authClient := authv1.NewAuthClient(authServiceConn)
+
+    eventServiceAddr := fmt.Sprintf("event-service:%s", cfg.EventGRPCPort)
+    eventServiceConn, err := grpc.NewClient(eventServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+    if err != nil {
+        logger.Error("Failed to dial event-service", "error", err)
+        os.Exit(1)
+    }
+    defer eventServiceConn.Close()
+    eventClient := eventv1.NewEventServiceClient(eventServiceConn)
+
+	bookingStorage := storage.New(dbPool, authClient, eventClient)
+    paymentGateway := service.NewHTTPPaymentGateway(cfg.PaymentServiceURL)
+	bookingService := service.New(bookingStorage, paymentGateway)
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.BookingGRPCPort))
 	if err != nil {
@@ -116,9 +135,13 @@ func main() {
 	logger.Info("Booking Service ready. gRPC server listening", "address", l.Addr().String())
 
 	healthSrv := health.NewServer()
+
+    statsHandler := otelgrpc.NewServerHandler()
+
+    // should be replaced with secure credentials
 	grpcSrv := grpc.NewServer(
+        grpc.StatsHandler(statsHandler),
 		grpc.ChainUnaryInterceptor(
-			otelgrpc.UnaryServerInterceptor(),
 			interceptors.ServerRequestIDInterceptor(),
 		),
 	)
@@ -234,21 +257,27 @@ func runExpirationWorker(ctx context.Context, provider worker.ChannelProvider, b
 				var msgBody map[string]int64
 				if err := json.Unmarshal(d.Body, &msgBody); err != nil {
 					logger.Error("Failed to unmarshal expiration message, discarding", "error", err)
-					_ = d.Nack(false, false)
+                    if err := d.Nack(false, false); err != nil {
+                        logger.Error("Failed to Nack message", "error", err)
+                    }
 					continue
 				}
 
 				bookingID, ok := msgBody["booking_id"]
 				if !ok {
 					logger.Error("Invalid message format, discarding", "body", string(d.Body))
-					_ = d.Nack(false, false)
+                    if err := d.Nack(false, false); err != nil {
+                        logger.Error("Failed to Nack message", "error", err)
+                    }
 					continue
 				}
 
 				opCtx, opCancel := context.WithTimeout(context.Background(), 1*time.Minute)
 				if err := bs.CancelBooking(opCtx, bookingID); err != nil {
 					logger.Error("Failed to process expired booking, retrying", "booking_id", bookingID, "error", err)
-					_ = d.Nack(false, true)
+                    if err := d.Nack(false, true); err != nil {
+                        logger.Error("Failed to Nack message for retry", "error", err)
+                    }
 					opCancel()
 					continue
 				}

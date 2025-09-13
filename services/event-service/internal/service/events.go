@@ -8,6 +8,7 @@ import (
 
 type EventProvider interface {
 	ListEvents(ctx context.Context, pageNumber, pageSize int32) ([]*eventv1.Event, int64, error)
+    GetEvent(ctx context.Context, eventID int64) (*eventv1.Event, error)
 }
 
 type Events struct {
@@ -20,4 +21,8 @@ func New(eventProvider EventProvider) *Events {
 
 func (e *Events) ListEvents(ctx context.Context, pageNumber, pageSize int32) ([]*eventv1.Event, int64, error) {
 	return e.eventProvider.ListEvents(ctx, pageNumber, pageSize)
+}
+
+func (e *Events) GetEvent(ctx context.Context, eventID int64) (*eventv1.Event, error) {
+    return e.eventProvider.GetEvent(ctx, eventID)
 }

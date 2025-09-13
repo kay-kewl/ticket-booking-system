@@ -7,7 +7,7 @@ import (
     "log/slog"
 
     "github.com/kay-kewl/ticket-booking-system/internal/rabbitmq"
-    amqp "github.com/kay-kewl/rabbitmq/amqp091-go"
+    amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type NotificationService struct {
@@ -53,20 +53,27 @@ func (s *NotificationService) StartConsumer(ctx context.Context, rabbitManager *
                 return
             }
 
-            s.processMessage(msg)
-            msg.Ack(false)
+            if err := s.processMessage(msg); err != nil {
+                s.logger.Error("Failed to process message, sending to DLQ", "error", err)
+                if nackErr := msg.Nack(false, false); nackErr != nil {
+                    s.logger.Error("Failed to nack message", "error", nackErr)
+                }
+            } else {
+                if ackErr := msg.Ack(false); ackErr != nil {
+                    s.logger.Error("Failed to ack message", "error", ackErr)
+                }
+            }
         }
     }
 }
 
-func (s *NotificationService) processMessage(msg amqp.Delivery) {
+func (s *NotificationService) processMessage(msg amqp.Delivery) error {
     var message struct {
         BookingID int64 `json:"booking_id"`
     }
 
     if err := json.Unmarshal(msg.Body, &message); err != nil {
-        s.logger.Error("Failed to unmarshal message, discarding", "error", err)
-        return
+        return fmt.Errorf("failed to unmarshal message: %w", err)
     }
 
     var notificationType string
@@ -82,6 +89,7 @@ func (s *NotificationService) processMessage(msg amqp.Delivery) {
     }
 
     s.logger.Info("Simulating sending notification", "type", notificationType, "booking_id", message.BookingID)
+    return nil
 }
 
 func (s *NotificationService) setupTopology(ch *amqp.Channel) error {

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 )
@@ -16,6 +15,7 @@ type Config struct {
 	RabbitMQURL     		string
 	JWTSecret       		string
 	PaymentWebhookSecret	string
+    PaymentServiceURL       string
 }
 
 func getEnv(key, defaultValue string) string {
@@ -39,16 +39,6 @@ func Load() (*Config, error) {
 		)
 	}
 
-	jwtSecret, ok := os.LookupEnv("JWT_SECRET")
-	if !ok || jwtSecret == "" {
-		return nil, errors.New("JWT_SECRET environmental variable is not set or empty")
-	}
-
-	webhookSecret, ok := os.LookupEnv("PAYMENT_WEBHOOK_SECRET")
-	if !ok || webhookSecret == "" {
-		return nil, errors.New("PAYMENT_WEBHOOK_SECRET environmental variable is not set or empty")
-	}
-
 	cfg := &Config{
 		APIPort:         		getEnv("API_PORT", "8080"),
 		AuthGRPCPort:    		getEnv("AUTH_GRPC_PORT", "50051"),
@@ -57,8 +47,9 @@ func Load() (*Config, error) {
 		EventGRPCPort:   		getEnv("EVENT_GRPC_PORT", "50052"),
 		PostgresURL:     		postgresURL,
 		RabbitMQURL:     		getEnv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"),
-		JWTSecret:       		jwtSecret,
-		PaymentWebhookSecret: 	webhookSecret,
+		JWTSecret:       		getEnv("JWT_SECRET", ""),
+		PaymentWebhookSecret:   getEnv("PAYMENT_WEBHOOK_SECRET", ""),
+        PaymentServiceURL:      getEnv("PAYMENT_SERVICE_URL", ""),
 	}
 
 	return cfg, nil

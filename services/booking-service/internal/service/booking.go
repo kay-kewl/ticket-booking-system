@@ -6,8 +6,10 @@ import (
     "encoding/json"
 	"errors"
 	"fmt"
+    "io"
 	"log/slog"
     "net/http"
+    "time"
 
 	"github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/storage"
 )
@@ -22,18 +24,63 @@ type BookingCreator interface {
 	ExpireBooking(ctx context.Context, bookingID int64) error
 }
 
-type PaymentSimulator func() bool
+type PaymentGateway interface {
+    InitiatePayment(ctx context.Context, bookingID int64, amount float64) error
+}
 
 type Booking struct {
 	bookingCreator 		BookingCreator
-	paymentServiceURL   string
+    paymentGateway      PaymentGateway
 }
 
-func New(bookingCreator BookingCreator, paymentServiceURL string) *Booking {
+func New(bookingCreator BookingCreator, gateway PaymentGateway) *Booking {
 	return &Booking{
 		bookingCreator: 	bookingCreator,
-		paymentServiceURL:	paymentServiceURL,
+        paymentGateway:     gateway,
 	}
+}
+
+type httpPaymentGateway struct {
+    client  *http.Client
+    url     string
+}
+
+func NewHTTPPaymentGateway(url string) PaymentGateway {
+    return &httpPaymentGateway{
+        client: &http.Client{Timeout: 1 * time.Minute},
+        url:    url,
+    }
+}
+
+func (g *httpPaymentGateway) InitiatePayment(ctx context.Context, bookingID int64, amount float64) error {
+    payload := map[string]any{
+        "booking_id":   bookingID,
+        "amount":       amount,
+    }
+
+    body, err := json.Marshal(payload)
+    if err != nil {
+        return fmt.Errorf("failed to marshal payment payload: %w", err)
+    }
+
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.url, bytes.NewReader(body))
+    if err != nil {
+        return fmt.Errorf("failed to build payment request: %w", err)
+    }
+    req.Header.Set("Content-Type", "application/json")
+
+    resp, err := g.client.Do(req)
+    if err != nil {
+        return fmt.Errorf("payment request failed: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        respBody, _ := io.ReadAll(resp.Body)
+        return fmt.Errorf("payment service returned status %d: %s", resp.StatusCode, string(respBody))
+    }
+
+    return err
 }
 
 func (b *Booking) CreateBooking(ctx context.Context, userID, eventID int64, seatIDs []int64) (int64, error) {
@@ -47,27 +94,31 @@ func (b *Booking) CreateBooking(ctx context.Context, userID, eventID int64, seat
 		}
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
-
-    paymentReqPayload := map[string]interface{}{
-        "booking_id":   bookingID,
-        "amount":       1500.0,
-    }
-
-    body, err := json.Marshal(paymentReqPayload)
+    
+    err = b.paymentGateway.InitiatePayment(ctx, bookingID, 1500.0)
     if err != nil {
-        b.bookingCreator.CancelBooking(context.Background(), bookingID)
-        return 0, fmt.Errorf("failed to create payment request payload: %w", err)
-    }
-
-    resp, err := http.Post(b.paymentServiceURL, "application/json", bytes.NewBuffer(body))
-    if err != nil || resp.StatusCode != http.StatusAccepted {
-        slog.Error("failed to initiate payment", "booking_id", bookingID, "error", err, "status_code", resp.StatusCode)
-        b.bookingCreator.CancelBooking(context.Background(), bookingID)
+        slog.Error("failed to initiate payment, compensating booking", "booking_id", bookingID, "error", err)
+        compensationCtx, cancel := context.WithTimeout(context.Background(), 1 * time.Minute)
+        defer cancel()
+        if compensationErr := b.bookingCreator.CancelBooking(compensationCtx, bookingID); compensationErr != nil {
+            slog.Error("critical: failed to compensate booking", "booking_id", bookingID, "error", compensationErr)
+        }
         return 0, ErrPaymentFailed
     }
 
     slog.Info("Booking created and payment initiated successfully", "booking_id", bookingID)
     return bookingID, nil
+}
+
+func (b *Booking) ConfirmBooking(ctx context.Context, bookingID int64) error {
+    const op = "service.ConfirmBooking"
+
+    err := b.bookingCreator.ConfirmBooking(ctx, bookingID)
+    if err != nil {
+        return fmt.Errorf("%s: %w", op, err)
+    }
+
+    return nil
 }
 
 func (b *Booking) CancelBooking(ctx context.Context, bookingID int64) error {

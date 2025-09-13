@@ -6,7 +6,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/kay-kewl/ticket-booking-system/internal/requestid"
+    "github.com/google/uuid"
+
+    "github.com/kay-kewl/ticket-booking-system/internal/requestid"
 )
 
 const requestIDMetadataKey = "x-request-id"
@@ -35,11 +37,18 @@ func ServerRequestIDInterceptor() grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
+        var requestID string
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
 			if values := md.Get(requestIDMetadataKey); len(values) > 0 {
-				ctx = context.WithValue(ctx, requestid.Key, values[0])
-			}
+                requestID = values[0]
+            }
 		}
+
+        if requestID == "" {
+            requestID = uuid.NewString()
+        }
+
+        ctx = context.WithValue(ctx, requestid.Key, requestID)
 
 		return handler(ctx, req)
 	}

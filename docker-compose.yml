@@ -65,6 +65,7 @@ services:
       - AUTH_GRPC_PORT=${AUTH_GRPC_PORT}
       - BOOKING_GRPC_PORT=${BOOKING_GRPC_PORT}
       - EVENT_GRPC_PORT=${EVENT_GRPC_PORT}
+      - PAYMENT_WEBHOOK_SECRET=${PAYMENT_WEBHOOK_SECRET}
     # volumes:
     #   - .:/app
     depends_on:
@@ -151,7 +152,9 @@ services:
     ports:
       - "50053:50053"
     environment:
+      - AUTH_GRPC_PORT=${AUTH_GRPC_PORT}
       - BOOKING_GRPC_PORT=${BOOKING_GRPC_PORT}
+      - EVENT_GRPC_PORT=${EVENT_GRPC_PORT}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_PORT=${POSTGRES_PORT}
@@ -168,7 +171,7 @@ services:
       rabbitmq:
         condition: service_healthy
       payment-service:
-	condition: service_started
+        condition: service_started
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50053"]
       interval: 10s
@@ -198,8 +201,8 @@ services:
       - RABBITMQ_URL=${RABBITMQ_URL}
     depends_on:
       rabbitmq:
-	condition:
-	  service_healthy
+        condition:
+          service_healthy
     networks:
       - booking-net
 
@@ -215,7 +218,7 @@ services:
       - ticket-storage:/tickets
     depends_on:
       rabbitmq:
-	condition: service_healthy
+        condition: service_healthy
     networks:
       - booking-net
 

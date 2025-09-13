@@ -22,7 +22,7 @@ func (s *Storage) ListEvents(ctx context.Context, pageNumber, pageSize int32) ([
 
 	var totalCount int64
 	if err := s.db.QueryRow(ctx, "SELECT COUNT(*) FROM event.events").Scan(&totalCount); err != nil {
-		return nil, 0, fmt.Errorf("%s: %w", op, err)
+        return nil, 0, fmt.Errorf("%s: failed to count events: %w", op, err)
 	}
 
 	offset := (pageNumber - 1) * pageSize
@@ -43,4 +43,18 @@ func (s *Storage) ListEvents(ctx context.Context, pageNumber, pageSize int32) ([
 	}
 
 	return events, totalCount, nil
+}
+
+func (s *Storage) GetEvent(ctx context.Context, eventID int64) (*eventv1.Event, error) {
+    const op = "storage.GetEvent"
+
+    var event eventv1.Event
+    query := "SELECT id, title, description FROM event.events WHERE id = $1"
+    err := s.db.QueryRow(ctx, query, eventID).Scan(&event.Id, &event.Title, &event.Description)
+    if err != nil {
+        // TODO: pgx.ErrNoRows -> "not found"
+        return nil, fmt.Errorf("%s: %w", op, err)
+    }
+
+    return &event, nil
 }

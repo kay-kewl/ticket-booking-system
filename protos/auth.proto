@@ -8,6 +8,7 @@ service Auth {
 	rpc Register(RegisterRequest) returns (RegisterResponse);
 	rpc Login(LoginRequest) returns (LoginResponse);
 	rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+        rpc GetUserDetails(GetUserDetailsRequest) returns (GetUserDetailsResponse);
 }
 
 message RegisterRequest {
@@ -34,4 +35,13 @@ message ValidateTokenRequest {
 
 message ValidateTokenResponse {
 	int64 user_id = 1;
+}
+
+message GetUserDetailsRequest {
+        int64 user_id = 1;
+}
+
+message GetUserDetailsResponse {
+        int64 user_id = 1;
+        string email = 2;
 }

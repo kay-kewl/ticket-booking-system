@@ -2,6 +2,7 @@ package integration_tests
 
 import (
 	"context"
+    "errors"
 	"log/slog"
 	"os"
 	"testing"
@@ -16,6 +17,22 @@ import (
 	bookingservice "github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/service"
 	bookingstorage "github.com/kay-kewl/ticket-booking-system/services/booking-service/internal/storage"
 )
+
+type simulatorPaymentGateway struct {
+    simulator func() bool
+}
+
+func NewSimulatorPaymentGateway(sim func() bool) bookingservice.PaymentGateway {
+    return &simulatorPaymentGateway{simulator: sim}
+}
+
+func (g *simulatorPaymentGateway) InitiatePayment(ctx context.Context, bookingID int64, amount float64) error {
+    if g.simulator() {
+        return nil
+    }
+
+    return errors.New("payment failed by simulator")
+}
 
 func TestBookingService_Integration(t *testing.T) {
 	if testing.Short() {
@@ -55,8 +72,8 @@ func TestBookingService_Integration(t *testing.T) {
 	storage := bookingstorage.New(pool)
 
 	t.Run("Happy Path - Successful Booking", func(t *testing.T) {
-		successSimulator := func() bool { return true }
-		service := bookingservice.New(storage, successSimulator)
+        successGateway := NewSimulatorPaymentGateway(func() bool { return true })
+        service := bookingservice.New(storage, successGateway)
 
 		userID := int64(1)
 		eventID := int64(1)
@@ -70,12 +87,12 @@ func TestBookingService_Integration(t *testing.T) {
 
 		var bookingStatus string
 		err = pool.QueryRow(
-			ctx, 
+            ctx, 
 			"SELECT status FROM booking.bookings WHERE id = $1",
 			bookingID,
 		).Scan(&bookingStatus)
 		require.NoError(t, err, "Should be able to query booking status")
-		require.Equal(t, "CONFIRMED", bookingStatus, "Booking status should be CONFIRMED")
+		require.Equal(t, "PENDING", bookingStatus, "Booking status should be PENDING")
 
 		var seatStatus string
 		err = pool.QueryRow(
@@ -84,12 +101,12 @@ func TestBookingService_Integration(t *testing.T) {
 			seatIDs[0],
 		).Scan(&seatStatus)
 		require.NoError(t, err, "Should be able to query seat status")
-		require.Equal(t, "BOOKED", seatStatus, "Seat status should be BOOKED")
+		require.Equal(t, "RESERVED", seatStatus, "Seat status should be RESERVED")
 	})
 
 	t.Run("Failed Path - Payment Fails and Booking is Cancelled", func(t *testing.T) {
-		failureSimulator := func() bool { return false }
-		service := bookingservice.New(storage, failureSimulator)
+		failureGateway := NewSimulatorPaymentGateway(func() bool { return false })
+		service := bookingservice.New(storage, failureGateway)
 
 		userID := int64(2)
 		eventID := int64(2)

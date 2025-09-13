@@ -16,6 +16,7 @@ type Auth interface {
 	Login(ctx context.Context, email string, password string) (token string, err error)
 	Register(ctx context.Context, email string, password string) (userID int64, err error)
 	ValidateToken(ctx context.Context, token string) (userID int64, err error)
+    GetUserDetails(ctx context.Context, userID int64) (email string, err error)
 }
 
 type serverAPI struct {
@@ -59,4 +60,21 @@ func (s *serverAPI) ValidateToken(ctx context.Context, req *authv1.ValidateToken
 	}
 
 	return &authv1.ValidateTokenResponse{UserId: userID}, nil
+}
+
+func (s *serverAPI) GetUserDetails(ctx context.Context, req *authv1.GetUserDetailsRequest) (*authv1.GetUserDetailsResponse, error) {
+    if req.GetUserId() <= 0 {
+        return nil, status.Error(codes.InvalidArgument, "user_id must be positive")
+    }
+
+    email, err := s.auth.GetUserDetails(ctx, req.GetUserId())
+    if err != nil {
+        // TODO: not found error
+        return nil, status.Error(codes.Internal, "failed to get user details")
+    }
+
+    return &authv1.GetUserDetailsResponse{
+        UserId: req.GetUserId(),
+        Email:  email,
+    }, nil
 }

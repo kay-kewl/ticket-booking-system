@@ -77,9 +77,12 @@ func main() {
 
 	healthSrv := health.NewServer()
 
+    statsHandler := otelgrpc.NewServerHandler()
+
+    // should be replaced with secure credentials
 	grpcSrv := grpc.NewServer(
+        grpc.StatsHandler(statsHandler),
 		grpc.ChainUnaryInterceptor(
-			otelgrpc.UnaryServerInterceptor(),
 			interceptors.ServerRequestIDInterceptor(),
 		),
 	)
